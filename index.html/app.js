@@ -1,0 +1,745 @@
+﻿const app = document.querySelector('#app'); 
+const STORAGE_KEY = 'companheiro-mvp';
+const API_ORIGIN = window.COMPANHEIRO_CONFIG?.apiOrigin || (location.protocol === 'http:' || location.protocol === 'https:' ? location.origin : '');
+const AI_ENDPOINT = window.COMPANHEIRO_CONFIG?.aiEndpoint || (API_ORIGIN ? `${API_ORIGIN}/api/companion-chat` : '');
+const HUMAN_AUDIO_ENDPOINT = window.COMPANHEIRO_CONFIG?.audioEndpoint || (API_ORIGIN ? `${API_ORIGIN}/api/motivation-audio` : '');
+const AUTH_TOKEN_KEY = 'companheiro-auth-token';
+const COMPANION_PERSONA = 'Você é o amigo que não deixa a pessoa desistir por qualquer motivo. Fale de modo humano, acolhedor, direto, inteligente, encorajador e levemente descontraído. Seja breve, natural e faça uma pergunta por vez. Nunca gere culpa, vergonha ou comparação. Não seja terapeuta, médico ou coach agressivo.';
+const GUILT_PHRASES = ['você está falhando', 'você está decepcionando', 'você é preguiçoso', 'você é preguiçosa', 'tenha vergonha', 'todo mundo está treinando', 'você nunca vai conseguir'];
+const weekDays = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'];
+const motivationalPhrases = [
+  'Você não precisa sentir vontade. Só precisa dar o próximo passo.',
+  'Cinco minutos já contam. Começar também é uma vitória.',
+  'Hoje não é sobre provar nada. É sobre cuidar de você.',
+  'Um treino de cada vez. Seu futuro agradece a presença de hoje.',
+  'Você não está sozinho. Eu fico com você até o próximo passo.',
+  'Não precisa ser perfeito. Precisa ser possível para hoje.',
+  'Seu ritmo também merece respeito. Vamos começar do jeito que der.',
+  'A parte mais difícil é começar. Eu fico aqui enquanto você começa.',
+  'Você já escolheu cuidar de si. Agora vamos transformar isso em um pequeno gesto.',
+  'Mesmo devagar, você ainda está indo.',
+  'O treino de hoje é um encontro com a pessoa que você quer ser.',
+  'Se o dia pesou, vamos diminuir o passo, não abandonar você.',
+  'Você não precisa carregar tudo sozinho. Vamos resolver só os próximos minutos.',
+  'A sua presença vale mais do que a sua performance.',
+  'Quando parecer difícil, me chama. A gente encontra uma versão possível.'
+];
+const sportMotivations = {
+  Academia: ['Seu treino de forca comeca com um movimento. Vamos fazer o primeiro.', 'Hoje voce nao precisa levantar o mundo. So precisa aparecer na academia.'],
+  Corrida: ['A primeira passada e o comeco de todo percurso. Vamos no seu ritmo.', 'Nao precisa correr rapido hoje. Precisa apenas sair e encontrar seu passo.'],
+  Caminhada: ['Uma caminhada ja e cuidado em movimento. Vamos respirar e comecar.', 'Coloque um tenis confortavel. O mundo fica um pouco mais leve depois de andar.'],
+  'Nata\u00e7\u00e3o': ['A agua espera por voce. Comece com calma e encontre seu ritmo.', 'Cada volta conta. Hoje vamos apenas chegar a piscina.'],
+  Ciclismo: ['A bicicleta leva voce para frente, uma pedalada por vez.', 'Capacete, agua e primeiro giro. O resto acontece no caminho.'],
+  'Danca': ['Coloque sua musica favorita. Seu corpo ja sabe como comecar.', 'Hoje nao e apresentacao. E so deixar o corpo encontrar alegria.']
+};
+const initialData = {
+  authenticated: false,
+  onboarded: false,
+  profile: { name: 'João', activity: 'Academia', activities: ['Academia'], frequency: 3, days: ['Segunda', 'Quarta', 'Sexta'], scheduleByDay: {}, time: '19:00', duration: 45, location: 'Não informado', commuteTime: 'Não informado', transport: 'Não informado', activeSchedule: true, notificationsEnabled: false, goal: 'Cuidar de mim', motivation: '', personalizedMotivation: '', difficulty: 'Manter constância', objections: ['Cansaço'], objection: 'Cansaço', disciplineLevel: 'Estou começando agora.', workStatus: 'Não informado', studyStatus: 'Não informado', hasChildren: 'Não informado' },
+  session: { status: 'PENDING', date: new Date().toISOString(), activity: 'Academia', time: '19:00', journey: {}, confirmed: false },
+  messages: [{ from: 'app', text: 'Hoje tem treino. Vamos começar a nos preparar?' }],
+  history: [],
+  memory: { objections: {}, lastObjection: null, lastIntent: null },
+  analytics: { rescueOpportunities: 0, rescues: 0, events: [] },
+  community: { requests: [], ratings: {}, checkedInDate: null, challengeJoined: false, challengeProgress: 0, posts: [
+    { id: 'post-1', author: 'Marina', activity: 'Corrida', text: 'Completei meus primeiros 5 km do mês. Um passo de cada vez.', likes: 24, liked: false, comments: 5, minutes: 18 },
+    { id: 'post-2', author: 'Rafael', activity: 'Academia', text: 'Treino curto hoje, mas apareci. Constancia vence a perfeicao.', likes: 16, liked: false, comments: 3, minutes: 42 },
+    { id: 'post-3', author: 'Bianca', activity: 'Yoga', text: 'Respirar, alongar e voltar para o presente.', likes: 31, liked: false, comments: 7, minutes: 65 }
+  ] },
+  rewards: { points: 0, streak: 0, badges: [] },
+  customization: { appName: 'Companheiro', theme: 'light', accent: 'green', sport: 'Academia' }
+};
+const sportCatalog = ['Academia', 'Corrida', 'Caminhada', 'Natação', 'Ciclismo', 'Crossfit', 'Dança', 'Futebol', 'Futsal', 'Basquete', 'Vôlei', 'Tênis', 'Beach Tennis', 'Badminton', 'Squash', 'Yoga', 'Pilates', 'Alongamento', 'Boxe', 'Jiu-Jitsu', 'Muay Thai', 'Karatê', 'Taekwondo', 'MMA', 'Skate', 'Surf', 'Remo', 'Canoagem', 'Stand up paddle', 'Escalada', 'Atletismo', 'Ginástica', 'Handebol', 'Rugby', 'Críquete', 'Beisebol', 'Softbol', 'Hóquei', 'Polo aquático', 'Patinação', 'Triatlo', 'Outra'];
+const sportIcons = { 'Academia': '◆', 'Corrida': '↗', 'Caminhada': '◌', 'Nata\u00e7\u00e3o': '≈', 'Ciclismo': '⊙', 'Crossfit': '✦', 'Danca': '♪', 'Futebol': '●', 'Futsal': '●', 'Basquete': '◉', 'V\u00f4lei': '◇', 'T\u00eanis': '◍', 'Beach Tennis': '◍', 'Badminton': '◍', 'Squash': '◍', 'Yoga': '☼', 'Pilates': '◌', 'Alongamento': '◌', 'Boxe': '✧', 'Jiu-Jitsu': '✧', 'Muay Thai': '✧', 'Karat\u00ea': '✧', 'Taekwondo': '✧', 'MMA': '✧', 'Skate': '◇', 'Surf': '≈', 'Remo': '≈', 'Canoagem': '≈', 'Stand up paddle': '≈', 'Escalada': '△', 'Atletismo': '↗', 'Gin\u00e1stica': '✦', 'Handebol': '●', 'Rugby': '●', 'Cr\u00edquete': '●', 'Beisebol': '●', 'Softbol': '●', 'H\u00f3quei': '●', 'Polo aqu\u00e1tico': '≈', 'Patina\u00e7\u00e3o': '◌', 'Triatlo': '↗', 'Outra': '✦' };
+const meetingPointCatalog = [
+  { id: 'ibirapuera-sp', name: 'Parque Ibirapuera', city: 'São Paulo, SP', lat: -23.5874, lng: -46.6576, activities: ['Corrida', 'Caminhada', 'Ciclismo'], members: 28, note: 'Área pública, movimentada e com boa iluminação.' },
+  { id: 'flamengo-rj', name: 'Aterro do Flamengo', city: 'Rio de Janeiro, RJ', lat: -22.9339, lng: -43.1719, activities: ['Corrida', 'Caminhada', 'Ciclismo', 'Skate'], members: 21, note: 'Ponto amplo para combinar durante o dia.' },
+  { id: 'pampulha-bh', name: 'Orla da Pampulha', city: 'Belo Horizonte, MG', lat: -19.8517, lng: -44.0122, activities: ['Corrida', 'Caminhada', 'Ciclismo'], members: 16, note: 'Encontro em espaço aberto e conhecido.' },
+  { id: 'parque-cidade-bsb', name: 'Parque da Cidade', city: 'Brasília, DF', lat: -15.7975, lng: -47.9028, activities: ['Corrida', 'Caminhada', 'Yoga', 'Ciclismo'], members: 13, note: 'Escolha um ponto visível dentro do parque.' },
+  { id: 'parque-barigui-curitiba', name: 'Parque Barigui', city: 'Curitiba, PR', lat: -25.4244, lng: -49.3073, activities: ['Corrida', 'Caminhada', 'Ciclismo'], members: 11, note: 'Combine sempre em área pública e movimentada.' },
+  { id: 'marco-zero-recife', name: 'Marco Zero', city: 'Recife, PE', lat: -8.0632, lng: -34.8711, activities: ['Caminhada', 'Corrida', 'Dança'], members: 9, note: 'Ponto cultural conhecido para iniciar juntos.' },
+  { id: 'qualquer-cidade', name: 'Ainda não encontrei um ponto', city: 'Sugira um local público', lat: -14.235, lng: -51.925, activities: sportCatalog, members: 0, note: 'A rede está crescendo. Nunca compartilhe seu endereço.' }
+];
+let data = load();
+data.profile = { ...initialData.profile, ...(data.profile || {}) };
+data.rewards = { ...initialData.rewards, ...(data.rewards || {}) };
+data.memory = { ...initialData.memory, ...(data.memory || {}), objections: { ...(data.memory?.objections || {}) } };
+data.analytics = { ...initialData.analytics, ...(data.analytics || {}) };
+data.analytics.events = data.analytics.events || [];
+data.community = { ...initialData.community, ...(data.community || {}), ratings: { ...(data.community?.ratings || {}) } };
+data.community.meetingPointIds = data.community.meetingPointIds || [];
+data.community.posts = data.community.posts || initialData.community.posts;
+data.customization = { ...initialData.customization, ...(data.customization || {}) };
+data.profile.activities = data.profile.activities || [data.profile.activity];
+data.profile.objections = data.profile.objections || (data.profile.objection ? [data.profile.objection] : []);
+data.profile.scheduleByDay = data.profile.scheduleByDay || {};
+data.profile.time = data.profile.time || data.session.time || '19:00';
+data.profile.days = selectedDaysForFrequency(data.profile.frequency, data.profile.days);
+data.profile.routines = data.profile.routines || [{ id: 'main', activity: data.profile.activity, days: data.profile.days, time: data.profile.time, duration: data.profile.duration, location: data.profile.location, commuteTime: data.profile.commuteTime, transport: data.profile.transport, active: data.profile.activeSchedule }];
+data.session.rescueOpportunity = Boolean(data.session.rescueOpportunity);
+data.session.rescued = Boolean(data.session.rescued);
+data.session.journey = data.session.journey || {};
+data.session.confirmed = Boolean(data.session.confirmed);
+let currentView = data.onboarded ? 'home' : 'onboarding';
+if (data.authenticated && location.hash === '#chat') currentView = 'chat';
+let onboardingStep = 0;
+let notificationTimers = [];
+let currentMotivation;
+let mapInstance;
+let userMarker;
+let locationWatcher;
+let humanVoiceAudioUrl;
+let voiceRecorder;
+let voiceChunks = [];
+let realtimePeer;
+let realtimeStream;
+let realtimeAudio;
+let socialRealtime;
+let liveTimer;
+let tripTimer;
+let tripState = { startedAt: null, lastPosition: null, distanceMeters: 0, speedKmh: 0 };
+let deferredInstallPrompt;
+let backendConversationId;
+window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); deferredInstallPrompt = event; render(); });
+window.addEventListener('appinstalled', () => {
+  if (!data.rewards.installed) { data.rewards.installed = true; awardPoints(10, 'app instalado'); }
+  toast('App instalado. Personalize seu Companheiro no Perfil.');
+});
+window.addEventListener('online', () => { if (currentView !== 'login') render(); });
+window.addEventListener('offline', () => { if (currentView !== 'login') render(); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type !== 'notification-opened') return; trackEvent('NOTIFICATION_OPENED', { type: event.data.key }); currentView = 'chat'; render(); if (event.data.text) window.setTimeout(() => playHumanMotivation(event.data.text), 120); });
+
+function load() {
+  try { return { ...initialData, ...JSON.parse(localStorage.getItem(STORAGE_KEY)) }; } catch { return initialData; }
+}
+function speakWelcome(name) {
+  speakMotivation(`Oi, ${name}. Eu sou seu Companheiro. Vou estar com você nos dias bons e nos dias difíceis. Hoje a gente só precisa dar um pequeno passo.`);
+}
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+async function apiRequest(path, options = {}) { if (!API_ORIGIN) return null; const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }; const token = localStorage.getItem(AUTH_TOKEN_KEY); if (token) headers.Authorization = `Bearer ${token}`; const response = await fetch(`${API_ORIGIN}${path}`, { ...options, headers }); if (!response.ok) throw new Error(`api_${response.status}`); return response.status === 204 ? null : response.json(); }
+function connectSocialRealtime() { if (!API_ORIGIN || !data.authenticated || socialRealtime) return; const token = localStorage.getItem(AUTH_TOKEN_KEY); const query = token ? `?token=${encodeURIComponent(token)}` : ''; socialRealtime = new EventSource(`${API_ORIGIN}/api/realtime${query}`); socialRealtime.addEventListener('feed-updated', async () => { try { const posts = await apiRequest('/api/social/feed'); if (posts?.length) { data.community.posts = posts; save(); if (currentView === 'home') render(); } } catch { /* Local feed remains available when realtime is offline. */ } }); socialRealtime.onerror = () => { socialRealtime?.close(); socialRealtime = null; window.setTimeout(connectSocialRealtime, 5000); }; }
+async function apiAudioRequest(path, options = {}) { if (!API_ORIGIN) throw new Error('api_unavailable'); const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }; const token = localStorage.getItem(AUTH_TOKEN_KEY); if (token) headers.Authorization = `Bearer ${token}`; const response = await fetch(`${API_ORIGIN}${path}`, { ...options, headers }); if (!response.ok) throw new Error(`api_${response.status}`); return response.blob(); }
+async function syncProfileWithBackend() { try { await apiRequest('/api/profile', { method: 'PUT', body: JSON.stringify({ activity: data.profile.activity, activities: data.profile.activities, frequency: data.profile.frequency, days: data.profile.days, time: data.profile.time, duration: data.profile.duration, location: data.profile.location, commuteTime: data.profile.commuteTime, transport: data.profile.transport, routines: data.profile.routines, goal: data.profile.goal, motivation: data.profile.motivation, personalizedMotivation: data.profile.personalizedMotivation, difficulty: data.profile.difficulty, objections: data.profile.objections, objection: data.profile.objection, disciplineLevel: data.profile.disciplineLevel, workStatus: data.profile.workStatus, studyStatus: data.profile.studyStatus, hasChildren: data.profile.hasChildren, notifications_enabled: Boolean(data.profile.notificationsEnabled) }) }); } catch { toast('Modo offline: perfil salvo neste aparelho'); } }
+async function syncFirstSessionWithBackend() { if (!data.session.backendId) { try { const result = await apiRequest('/api/sessions', { method: 'POST', body: JSON.stringify({ activity: data.session.activity, scheduled_at: `${todayKey()}T${data.session.time}:00`, status: 'PENDING' }) }); data.session.backendId = result.id; save(); } catch { /* Offline mode keeps the local session available. */ } } }
+async function syncMessageToBackend(from, text) { try { if (!backendConversationId) { const conversation = await apiRequest('/api/conversations', { method: 'POST', body: JSON.stringify({ training_session_id: data.session.backendId || null }) }); backendConversationId = conversation.id; } await apiRequest(`/api/conversations/${backendConversationId}/messages`, { method: 'POST', body: JSON.stringify({ sender_type: from === 'user' ? 'USER' : 'APP', message: text, message_type: 'TEXT', ai_generated: from === 'app' }) }); } catch { /* Offline mode keeps the conversation in local storage. */ } }
+async function syncFeedbackToBackend(feedback) { if (!data.session.backendId) return; try { await apiRequest('/api/feedback', { method: 'POST', body: JSON.stringify({ training_session_id: data.session.backendId, ...feedback }) }); } catch { /* Offline mode keeps feedback locally. */ } }
+async function toggleRealtimeVoice(button) { if (realtimePeer) { realtimePeer.close(); realtimeStream?.getTracks().forEach(track => track.stop()); realtimePeer = null; realtimeStream = null; button.textContent = 'Conversar por voz'; toast('Conversa por voz encerrada'); return; } if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) { toast('Conversa por voz não suportada neste aparelho'); return; } try { realtimeStream = await navigator.mediaDevices.getUserMedia({ audio: true }); realtimePeer = new RTCPeerConnection(); realtimePeer.ontrack = event => { if (!realtimeAudio) realtimeAudio = new Audio(); realtimeAudio.srcObject = event.streams[0]; realtimeAudio.play().catch(() => {}); }; realtimeStream.getTracks().forEach(track => realtimePeer.addTrack(track, realtimeStream)); const channel = realtimePeer.createDataChannel('oai-events'); channel.onopen = () => channel.send(JSON.stringify({ type: 'response.create', response: { instructions: `Converse com ${data.profile.name} sobre o próximo passo de ${data.profile.activity}. Faça uma pergunta por vez.` } })); const offer = await realtimePeer.createOffer(); await realtimePeer.setLocalDescription(offer); const answer = await fetch(`${API_ORIGIN}/api/realtime-call`, { method: 'POST', headers: { 'Content-Type': 'application/sdp', Authorization: `Bearer ${localStorage.getItem(AUTH_TOKEN_KEY) || ''}`, 'x-realtime-session': JSON.stringify({ instructions: `Você é o Companheiro de ${data.profile.name}. Ajude a pessoa a começar sem culpa.` }) }, body: offer.sdp }); if (!answer.ok) throw new Error('realtime_unavailable'); await realtimePeer.setRemoteDescription({ type: 'answer', sdp: await answer.text() }); button.textContent = 'Encerrar conversa'; toast('Conversa por voz ativa'); } catch { realtimePeer?.close(); realtimePeer = null; realtimeStream?.getTracks().forEach(track => track.stop()); realtimeStream = null; toast('Voz em tempo real indisponível. Use Ouvir mensagem.'); } }
+async function syncSessionStatusWithBackend() { if (!data.session.backendId) return; try { await apiRequest(`/api/sessions/${data.session.backendId}`, { method: 'PATCH', body: JSON.stringify({ status: data.session.status, rescue_opportunity: Boolean(data.session.rescueOpportunity), rescued: Boolean(data.session.rescued) }) }); } catch { /* Offline mode keeps the local state authoritative. */ } }
+function trackEvent(eventName, metadata = {}) { data.analytics.events.push({ event_name: eventName, metadata, created_at: new Date().toISOString() }); save(); }
+function createFirstSession() { if (data.session.created) return; data.session.created = true; data.session.activity = data.profile.activity; data.session.time = data.profile.time; data.session.date = new Date().toISOString(); trackEvent('TRAINING_CREATED', { source: 'onboarding' }); syncProfileWithBackend(); syncFirstSessionWithBackend(); }
+function toast(text) { const el = document.querySelector('.toast'); if (!el) return; el.textContent = text; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2200); }
+function escapeHtml(text) { return String(text).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
+function applyCustomization() {
+  const root = document.documentElement;
+  root.dataset.theme = data.customization.theme === 'dark' ? 'dark' : 'light';
+  root.dataset.accent = data.customization.accent || 'green';
+  root.dataset.sport = sportKey(data.profile.activity);
+  document.title = data.customization.appName || 'Companheiro';
+}
+function icon(name) { const paths = { home: '<path d="m4 10 8-6 8 6v10H4Z"/><path d="M9 20v-6h6v6"/>', today: '<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1Z"/>', routine: '<path d="M5 5h14M5 12h9M5 19h5"/><path d="M18 15v6M15 18h6"/>', map: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>', community: '<path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7" r="3"/><path d="M17 11a3 3 0 1 0-1.2-5.75M20 20v-1.5a4 4 0 0 0-2.5-3.7"/>', history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/>', profile: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>', back: '<path d="M19 12H5m6-6-6 6 6 6"/>', send: '<path d="m4 12 16-8-5 16-3-6-8-2Z"/><path d="m12 14 3-3"/>' }; return `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || '<circle cx="12" cy="12" r="3"/>'}</svg>`; }
+function levelInfo() {
+  const level = Math.floor(data.rewards.points / 100) + 1;
+  return { level, progress: data.rewards.points % 100, next: level * 100 };
+}
+function awardPoints(amount, reason) {
+  data.rewards.points += amount;
+  const thresholds = [{ points: 20, badge: 'Primeiro passo' }, { points: 100, badge: 'Presença' }, { points: 250, badge: 'Constância' }];
+  thresholds.forEach(item => { if (data.rewards.points >= item.points && !data.rewards.badges.includes(item.badge)) data.rewards.badges.push(item.badge); });
+  save(); toast(`+${amount} pontos · ${reason}`);
+}
+function analyzeMessage(text) {
+  const lower = text.toLowerCase();
+  const rules = [
+    { objection: 'dor', keywords: ['dor', 'lesão', 'machuquei', 'mal-estar', 'não estou bem'], intent: 'safety' },
+    { objection: 'frio', keywords: ['está frio', 'tá frio', 'fazendo frio'], intent: 'resistance' },
+    { objection: 'chuva', keywords: ['chuva', 'chovendo'], intent: 'constraint' },
+    { objection: 'filhos', keywords: ['meu filho', 'minha filha', 'meus filhos'], intent: 'constraint' },
+    { objection: 'cansaço', keywords: ['cansado', 'exausto', 'sem energia'], intent: 'resistance' },
+    { objection: 'falta de vontade', keywords: ['sem vontade', 'preguiça', 'desanimado'], intent: 'resistance' },
+    { objection: 'falta de tempo', keywords: ['sem tempo', 'atrasado', 'trabalho'], intent: 'constraint' },
+    { objection: 'preparação', keywords: ['vou me preparar', 'roupa', 'tênis'], intent: 'commitment' },
+    { objection: 'saída', keywords: ['já saí', 'estou indo', 'na rua'], intent: 'commitment' },
+    { objection: 'companhia', keywords: ['não quero correr sozinho', 'não quero correr sozinha', 'sem companhia', 'correr com alguém', 'treinar com alguém'], intent: 'community' }
+  ];
+  const match = rules.find(rule => rule.keywords.some(keyword => lower.includes(keyword)));
+  return match ? { ...match, confidence: 0.92 } : { objection: null, intent: 'open', confidence: 0.46 };
+}
+const OBJECTION_BACKEND_NAMES = { 'dor': 'Dor', 'frio': 'Frio', 'chuva': 'Chuva', 'filhos': 'Filhos', 'cansaço': 'Cansaço', 'falta de vontade': 'Falta de vontade', 'falta de tempo': 'Falta de tempo', 'companhia': 'Falta de companhia' };
+function syncObjectionWithBackend(objection) {
+  const name = OBJECTION_BACKEND_NAMES[objection];
+  if (!name) return;
+  apiRequest('/api/objections', { method: 'POST', body: JSON.stringify({ name }) }).catch(() => { /* Offline mode keeps the local tally authoritative. */ });
+}
+function rememberMessage(text) {
+  const analysis = analyzeMessage(text);
+  data.memory.lastIntent = analysis.intent;
+  if (analysis.objection) { data.memory.lastObjection = analysis.objection; data.memory.objections[analysis.objection] = (data.memory.objections[analysis.objection] || 0) + 1; }
+  if (['safety', 'resistance', 'constraint', 'community'].includes(analysis.intent) && analysis.objection) syncObjectionWithBackend(analysis.objection);
+  if (['resistance', 'constraint'].includes(analysis.intent) && !data.session.rescueOpportunity) { data.session.rescueOpportunity = true; data.analytics.rescueOpportunities += 1; }
+  save();
+  return analysis;
+}
+function rescueRate() { if (!data.analytics.rescueOpportunities) return 0; return Math.round((data.analytics.rescues / data.analytics.rescueOpportunities) * 100); }
+function safeCompanionResponse(response) {
+  const normalized = String(response || '').trim();
+  if (!normalized || GUILT_PHRASES.some(phrase => normalized.toLowerCase().includes(phrase))) return fallbackResponse('');
+  return normalized;
+}
+function buildMotivation(seed = Math.random()) {
+  const { activity, objection, goal, difficulty } = data.profile;
+  const activities = data.profile.activities || [activity];
+  const sportPhrases = activities.flatMap(item => sportMotivations[item] || []);
+  const contextualPhrases = [
+    `Hoje é um bom dia para cuidar de você. Só comece com cinco minutos de ${activity.toLowerCase()}.`,
+    `Você não precisa vencer o treino inteiro agora. Só precisa vencer o primeiro passo.`,
+    `Mesmo com ${objection.toLowerCase()}, ainda dá para escolher uma versão possível do seu treino.`,
+    `Eu lembro que sua dificuldade é ${difficulty.toLowerCase()}. Hoje vamos cuidar só do próximo passo.`,
+    `Seu motivo importa: ${(data.profile.personalizedMotivation || goal).toLowerCase()}. Vamos fazer algo pequeno por ele hoje.`,
+    'Não espere a vontade chegar. Comece devagar e deixe o movimento trazer o resto.',
+    'Você já fez algo importante: decidiu não desistir de você hoje.',
+    ...motivationalPhrases,
+    ...sportPhrases
+  ];
+  return contextualPhrases[Math.floor(seed * contextualPhrases.length) % contextualPhrases.length];
+}
+function dailyMotivation() { const daySeed = new Date().getFullYear() * 366 + new Date().getMonth() * 31 + new Date().getDate(); return buildMotivation((daySeed % 1000) / 1000); }
+function motivationText() { if (!currentMotivation) currentMotivation = dailyMotivation(); return currentMotivation; }
+function refreshMotivation() { currentMotivation = buildMotivation(); render(); toast('Nova motivação pronta'); }
+function speakMotivation(text = motivationText()) {
+  if (!('speechSynthesis' in window)) { toast('Áudio não suportado neste aparelho'); return; }
+  window.speechSynthesis.cancel();
+  const speech = new SpeechSynthesisUtterance(text);
+  const voice = window.speechSynthesis.getVoices().find(item => item.lang.toLowerCase().startsWith('pt-br'));
+  if (voice) speech.voice = voice;
+  speech.lang = 'pt-BR'; speech.rate = 0.9; speech.pitch = 1.02;
+  window.speechSynthesis.speak(speech); toast('Reproduzindo motivação');
+}
+async function playHumanMotivation(text = motivationText()) {
+  if (humanVoiceAudioUrl) {
+    const audio = new Audio(humanVoiceAudioUrl); await audio.play(); toast('Reproduzindo voz humana'); return;
+  }
+  if (!HUMAN_AUDIO_ENDPOINT) { speakMotivation(text); return; }
+  try {
+    const audioBlob = await apiAudioRequest('/api/motivation-audio', { method: 'POST', body: JSON.stringify({ text, language: 'pt-BR', voice: 'friendly' }) });
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(audioUrl); await audio.play(); toast('Áudio com voz humana');
+  } catch { speakMotivation(text); }
+}
+async function showAppNotification(title, options) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, options);
+      return;
+    }
+  } catch { /* Fall back to a foreground notification when the worker is unavailable. */ }
+  new Notification(title, options);
+}
+function clearNotificationTimers() {
+  notificationTimers.forEach(timer => window.clearTimeout(timer));
+  notificationTimers = [];
+}
+function notificationStorageKey(item) {
+  const sessionKey = data.session.backendId || data.session.date || data.session.activity;
+  return `companheiro-notification:${sessionKey}:${todayKey()}:${item.key}`;
+}
+function notificationAlreadySent(item) { return localStorage.getItem(notificationStorageKey(item)) === 'sent'; }
+function notificationBody(item) {
+  const activity = data.profile.activity;
+  return item.key === 'T_MINUS_60' ? `Hoje tem ${activity}. Vamos começar?` : item.key === 'T_MINUS_45' ? 'Roupa separada?' : item.key === 'T_MINUS_30' ? 'O que está te segurando?' : item.key === 'T_MINUS_20' ? 'Só coloca a roupa e o tênis. Depois você decide o próximo passo.' : 'E aí, você foi?';
+}
+function notificationPlan() {
+  const postOffset = Math.max(20, (Number(data.profile.duration) || 45) + 10);
+  return [{ key: 'T_MINUS_60', offset: -60, title: 'Hoje tem treino' }, { key: 'T_MINUS_45', offset: -45, title: 'Vamos nos preparar?' }, { key: 'T_MINUS_30', offset: -30, title: 'Estou com você' }, { key: 'T_MINUS_20', offset: -20, title: 'Só o próximo passo' }, { key: 'POST_TRAINING', offset: postOffset, title: 'Depois do treino' }];
+}
+function notificationCanRun(item) {
+  const finalStates = ['COMPLETED', 'CANCELLED', 'RESCHEDULED', 'NOT_COMPLETED'];
+  if (!data.profile.notificationsEnabled || finalStates.includes(data.session.status)) return false;
+  if (data.session.confirmed || data.session.status === 'LEFT') return item.key === 'POST_TRAINING';
+  return true;
+}
+async function dispatchScheduledNotification(item) {
+  if (!notificationCanRun(item) || notificationAlreadySent(item)) return;
+  localStorage.setItem(notificationStorageKey(item), 'sent');
+  const text = notificationBody(item);
+  await showAppNotification(item.title, { body: text, tag: `companheiro-${item.key.toLowerCase()}`, renotify: false, silent: false, vibrate: [180, 80, 180], data: { type: 'companheiro-notification', key: item.key, text } });
+  trackEvent('NOTIFICATION_SENT', { type: item.key });
+  if (document.visibilityState === 'visible') window.setTimeout(() => playHumanMotivation(text), 0);
+}
+function scheduleTrainingNotifications() {
+  clearNotificationTimers();
+  if (!('Notification' in window) || Notification.permission !== 'granted' || !data.profile.notificationsEnabled) return;
+  const trainingTime = trainingDate();
+  notificationPlan().forEach(item => {
+    const triggerAt = new Date(trainingTime.getTime() + item.offset * 60 * 1000);
+    const delay = triggerAt.getTime() - Date.now();
+    if (delay <= 0 || !notificationCanRun(item)) return;
+    notificationTimers.push(window.setTimeout(() => dispatchScheduledNotification(item), delay));
+  });
+}
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(char => char.charCodeAt(0)));
+}
+async function subscribeToPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !API_ORIGIN) return;
+  try {
+    const { publicKey } = await apiRequest('/api/push/public-key');
+    if (!publicKey) return;
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+    await apiRequest('/api/devices', { method: 'POST', body: JSON.stringify({ device_token: JSON.stringify(subscription), platform: 'WEB' }) });
+  } catch { /* Sem push real, o app continua funcionando com o reforço local em primeiro plano. */ }
+}
+async function enableNotifications() {
+  if (!('Notification' in window)) { toast('Notificações não suportadas'); return; }
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') { toast('Permissão de notificação não concedida'); return; }
+  data.profile.notificationsEnabled = true;
+  save();
+  syncProfileWithBackend();
+  await subscribeToPush();
+  const welcome = `Notificações ativadas. Hoje tem ${data.profile.activity}. Vamos começar?`;
+  await showAppNotification('Companheiro ativado', { body: welcome, tag: 'companheiro-enabled', silent: false, vibrate: [180, 80, 180], data: { type: 'companheiro-notification', key: 'enabled', text: welcome } });
+  scheduleTrainingNotifications();
+  playHumanMotivation(welcome);
+  toast('Notificações com mensagem e áudio ativadas');
+}
+
+function render() {
+  applyCustomization();
+  connectSocialRealtime();
+  if (data.profile.notificationsEnabled) scheduleTrainingNotifications(); else clearNotificationTimers();
+  if (!data.authenticated) {
+    app.innerHTML = renderLoginV2();
+    bindEvents();
+    return;
+  }
+  if (currentView === 'summary') createFirstSession();
+  if (currentView === 'onboarding') {
+    app.innerHTML = renderOnboarding();
+    bindEvents();
+    return;
+  }
+  const views = { home: renderFeed, summary: renderSummaryV3, today: renderToday, routine: renderRoutineV3, history: renderHistoryV2, profile: renderProfileV4, customize: renderCustomizeV2, admin: renderAdmin, chat: renderChatV2, map: renderMap, community: renderCommunity };
+  app.innerHTML = views[currentView]();
+  if (currentView === 'chat') app.innerHTML = app.innerHTML.replace('</section>', '<button class="audio-button realtime-voice-button" data-realtime-voice>Conversar por voz</button></section>');
+  if (!['chat', 'summary'].includes(currentView)) app.innerHTML += renderNavMvp();
+  bindEvents();
+  if (currentView === 'map') window.setTimeout(initMeetingMap, 0);
+  if (currentView === 'today') startLiveClock(); else window.clearInterval(liveTimer);
+}
+function renderLoginV2() {
+  return `<section class="screen login-screen"><div class="brand-row"><div class="logo"><span class="logo-mark">✦</span> companheiro</div><span class="offline-badge">${navigator.onLine ? 'online' : 'offline pronto'}</span></div><div class="login-hero"><div class="hero-shape"></div><div class="eyebrow">SEU COMPANHEIRO DIARIO</div><h1>Como posso chamar voce?</h1><p class="lead">Eu vou lembrar do que voce gosta e estar por perto quando comecar parecer dificil.</p><form id="login-form" class="login-form"><label class="field-label" for="user-name">Seu nome</label><input id="user-name" name="name" class="text-input" placeholder="Digite seu nome" autocomplete="name" required /><label class="field-label" for="user-email">E-mail</label><input id="user-email" name="email" class="text-input" type="email" placeholder="voce@exemplo.com" autocomplete="email" required /><label class="field-label" for="user-password">Senha</label><input id="user-password" name="password" class="text-input" type="password" minlength="8" placeholder="Minimo de 8 caracteres" autocomplete="new-password" required /><button class="primary" type="submit">Criar meu espaco <span>→</span></button></form></div><p class="login-note">Seus dados ficam protegidos e o app continua funcionando sem internet.</p></section>`;
+}
+
+function renderLogin() {
+  return `<section class="screen login-screen"><div class="brand-row"><div class="logo"><span class="logo-mark">✦</span> companheiro</div><span class="offline-badge">${navigator.onLine ? 'online' : 'offline pronto'}</span></div><div class="login-hero"><div class="hero-shape"></div><div class="eyebrow">SEU COMPANHEIRO DIÁRIO</div><h1>Como posso chamar você?</h1><p class="lead">Eu vou lembrar do que você gosta e estar por perto nos dias em que começar parecer difícil.</p><form id="login-form" class="login-form"><label class="field-label" for="user-name">Seu nome</label><input id="user-name" name="name" class="text-input" placeholder="Digite seu nome" autocomplete="name" required /><label class="field-label" for="user-email">E-mail <span class="small">opcional</span></label><input id="user-email" name="email" class="text-input" type="email" placeholder="voce@exemplo.com" autocomplete="email" /><button class="primary" type="submit">Entrar no meu espaço <span>→</span></button></form></div><p class="login-note">Seus dados ficam neste aparelho e o app continua funcionando sem internet.</p></section>`;
+}
+function renderSummary() { return `<section class="screen summary-screen"><div class="brand-row"><div class="logo"><span class="logo-mark">✦</span> companheiro</div><span class="eyebrow">PERFIL PRONTO</span></div><div class="summary-hero"><div class="hero-shape"></div><h1>Já entendi um pouco sobre você.</h1><p class="lead">Nos dias de treino, eu vou estar aqui para ajudar você a não desistir.</p></div><div class="card summary-card"><div class="profile-line"><span class="small">Atividade</span><strong>${escapeHtml(data.profile.activity)} · ${data.profile.frequency}x por semana</strong></div><div class="profile-line"><span class="small">Horário</span><strong>${data.profile.time}</strong></div><div class="profile-line"><span class="small">Principal dificuldade</span><strong>${escapeHtml(data.profile.difficulty)}</strong></div><div class="profile-line"><span class="small">Objetivo</span><strong>${escapeHtml(data.profile.motivation || data.profile.goal)}</strong></div><div class="profile-line"><span class="small">Seu momento</span><strong>${escapeHtml(data.profile.disciplineLevel)}</strong></div></div><button class="primary summary-cta" data-enter-app>Fechado. Vamos nessa. <span>→</span></button></section>`; }
+function renderOnboarding() {
+  const steps = [
+    { title: 'Vamos cuidar da sua disciplina?', text: 'Eu não estou aqui apenas para lembrar você de treinar. Quero ajudar justamente nos dias em que sua vontade de desistir aparecer.', options: [] },
+    { title: 'Qual atividade você pratica?', text: 'Escolha a principal agora. Você poderá adicionar outras modalidades depois.', options: ['Academia', 'Corrida', 'Caminhada', 'Natação', 'Ciclismo', 'Crossfit', 'Dança', 'Outra'] },
+    { title: 'Quando costuma treinar?', text: 'Um horário simples já ajuda a criar o primeiro compromisso.', options: [] },
+    { title: 'O que costuma te segurar?', text: 'Pode escolher mais de uma. Isso ajuda o Companheiro a entender você.', options: ['Cansaço', 'Preguiça', 'Falta de tempo', 'Trabalho', 'Filhos', 'Frio', 'Chuva', 'Falta de vontade', 'Desânimo', 'Não vejo resultado', 'Falta de companhia', 'Vergonha', 'Dor', 'Outro'] },
+    { title: 'O que torna sua rotina difícil?', text: 'Uma resposta curta ajuda a conversa a ficar mais real. Só isso.', options: [] }
+  ][onboardingStep];
+  if (onboardingStep === 1) steps.options = sportCatalog;
+  const selected = onboardingStep === 1 ? (data.profile.activities || [data.profile.activity]) : onboardingStep === 3 ? (data.profile.objections || []) : data.profile.objection;
+  return `<section class="screen onboarding">
+    <div><div class="brand-row"><div class="logo"><span class="logo-mark">✦</span> companheiro</div><span class="small">${onboardingStep + 1}/5</span></div>
+    <div class="progress"><span style="width:${((onboardingStep + 1) / 5) * 100}%"></span></div>
+    <div class="hero">${onboardingStep === 0 ? '<div class="hero-shape"></div>' : ''}<h1>${steps.title}</h1><p class="lead">${steps.text}</p>
+    ${steps.options.length ? `<div class="choice-grid">${steps.options.map(option => `<button class="choice ${selected.includes(option) ? 'selected' : ''}" data-onboard-choice="${option}">${option}</button>`).join('')}</div>` : ''}
+    ${onboardingStep === 2 ? `<div class="form-block"><label class="field-label" for="frequency">Quantas vezes por semana?</label><select id="frequency" class="text-input"><option value="1" ${data.profile.frequency === 1 ? 'selected' : ''}>1 vez</option><option value="2" ${data.profile.frequency === 2 ? 'selected' : ''}>2 vezes</option><option value="3" ${data.profile.frequency === 3 ? 'selected' : ''}>3 vezes</option><option value="4" ${data.profile.frequency === 4 ? 'selected' : ''}>4 vezes</option><option value="5" ${data.profile.frequency === 5 ? 'selected' : ''}>5 vezes</option><option value="6" ${data.profile.frequency === 6 ? 'selected' : ''}>6 vezes</option><option value="7" ${data.profile.frequency === 7 ? 'selected' : ''}>Todos os dias</option></select><span class="field-label days-label">Em quais dias você normalmente pratica?</span><div class="days-grid">${['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'].map(day => `<label class="day-check"><input type="checkbox" name="training-days" value="${day}" ${(data.profile.days || []).includes(day) ? 'checked' : ''} /><span>${day}</span></label>`).join('')}</div><label class="field-label" for="training-time">Horário normalmente</label><input id="training-time" class="time-input" type="time" value="${data.profile.time}" /><label class="field-label" for="training-duration">Duração aproximada</label><input id="training-duration" class="text-input" type="number" min="5" max="240" value="${data.profile.duration}" placeholder="minutos" /><label class="field-label" for="commute-time">Quanto leva para chegar?</label><select id="commute-time" class="text-input"><option>Não informado</option><option>Menos de 10 minutos</option><option>10–20 minutos</option><option>20–30 minutos</option><option>30–60 minutos</option><option>Mais de 1 hora</option></select><label class="field-label" for="transport">Como você chega?</label><select id="transport" class="text-input"><option>Não informado</option><option>A pé</option><option>Carro</option><option>Ônibus</option><option>Metrô/trem</option><option>Bicicleta</option><option>Outro</option></select></div>` : ''}
+    ${onboardingStep === 4 ? `<div class="form-block"><label class="field-label" for="difficulty">Minha maior dificuldade hoje</label><input id="difficulty" class="text-input" value="${escapeHtml(data.profile.difficulty)}" placeholder="Ex.: chego cansado do trabalho" /></div>` : ''}
+    ${onboardingStep === 4 ? `<div class="form-block"><label class="field-label" for="motivation">Por que você quer praticar?</label><select id="motivation" class="text-input"><option>Melhorar minha saúde</option><option>Emagrecer</option><option>Melhorar minha autoestima</option><option>Ter mais disposição</option><option>Cuidar de mim</option><option>Melhorar minha aparência</option><option>Acompanhar meus filhos</option><option>Envelhecer melhor</option><option>Melhorar meu desempenho</option><option>Realizar um sonho</option><option>Outro</option></select><label class="field-label" for="personalized-motivation">Quero escrever com minhas próprias palavras</label><input id="personalized-motivation" class="text-input" value="${escapeHtml(data.profile.personalizedMotivation)}" placeholder="O que isso significa para você?" /><label class="field-label" for="goal">O que você quer cuidar em você?</label><input id="goal" class="text-input" value="${escapeHtml(data.profile.goal)}" placeholder="Ex.: ter mais disposição" /><label class="field-label" for="difficulty">O que mais dificulta?</label><input id="difficulty" class="text-input" value="${escapeHtml(data.profile.difficulty)}" placeholder="Ex.: chego cansado do trabalho" /><label class="field-label" for="discipline-level">Qual frase mais parece com você?</label><select id="discipline-level" class="text-input"><option>Estou começando agora.</option><option>Eu até consigo manter uma rotina.</option><option>Sou bastante disciplinado.</option><option>Eu começo, paro e começo de novo.</option></select><label class="field-label" for="work-status">Você trabalha?</label><select id="work-status" class="text-input"><option>Não informado</option><option>Sim</option><option>Não</option></select><label class="field-label" for="study-status">Você estuda?</label><select id="study-status" class="text-input"><option>Não informado</option><option>Sim</option><option>Não</option></select><label class="field-label" for="has-children">Você tem filhos?</label><select id="has-children" class="text-input"><option>Não informado</option><option>Sim</option><option>Não</option></select></div>` : ''}
+    </div><div class="button-row"><button class="primary" data-onboard-next>${onboardingStep === 4 ? 'Conhecer meu app' : onboardingStep === 0 ? 'Começar' : 'Continuar'} <span>→</span></button></div>
+  </section>`;
+}
+function renderNav() {
+  return `<nav class="bottom-nav">${[['today','Hoje'],['routine','Rotina'],['map','Mapa'],['community','Comunidade'],['history','Histórico'],['profile','Perfil']].map(([id,label]) => `<button class="nav-item ${currentView === id ? 'active' : ''}" data-view="${id}"><span>${icon(id)}</span>${label}</button>`).join('')}</nav>`;
+}
+function communityPeople() { return [{ id: 'ana', name: 'Ana', activity: 'Corrida', distance: 'perto do seu bairro', time: '18:30', rating: 4.9, reviews: 18, badge: 'Presença verificada' }, { id: 'leo', name: 'Leo', activity: 'Caminhada', distance: 'ponto de encontro público', time: '19:00', rating: 4.8, reviews: 12, badge: 'Companheiro frequente' }, { id: 'bia', name: 'Bia', activity: 'Academia', distance: 'academia parceira', time: '20:00', rating: 5, reviews: 9, badge: 'Comunidade ativa' }]; }
+function renderCommunity() { const people = communityPeople().filter(person => (data.profile.activities || [data.profile.activity]).includes(person.activity) || person.activity === data.profile.activity); return `<section class="screen community-screen">${header('Encontrar companhia', 'COMUNIDADE')}<p class="lead">Você não precisa fazer tudo sozinho. Encontre alguém com ritmo e horário parecidos.</p><div class="community-note"><strong>Encontro seguro primeiro.</strong><span>Compartilhe só o necessário. O app não mostra seu telefone nem sua localização exata.</span></div><div class="section-title"><div class="stat-line"><h3>Para seu próximo treino</h3><span class="status-pill">${data.profile.activity}</span></div></div><div class="community-list">${(people.length ? people : communityPeople()).map(person => `<article class="person-card"><div class="person-avatar">${person.name[0]}</div><div class="person-main"><div class="person-line"><div><h3>${person.name}</h3><p class="small">${person.activity} · ${person.time}</p></div><span class="trust-badge">✓ ${person.rating}</span></div><p class="small">${person.distance}</p><span class="person-badge">${person.badge}</span><button class="secondary partner-button" data-partner="${person.id}">Enviar convite</button></div></article>`).join('')}</div><div class="section-title"><h3>Avaliações da comunidade</h3></div><div class="card rating-card"><p class="small">Depois de treinar com alguém, conte como foi para manter a comunidade confiável.</p><div class="rating-stars">${[1,2,3,4,5].map(score => `<button data-rating="${score}">${score} ★</button>`).join('')}</div><div class="small" data-rating-status>Nenhuma avaliação enviada ainda.</div></div></section>`; }
+function header(title, kicker = 'COMPANHEIRO') { const initial = String(data.profile.name || 'C').trim().charAt(0).toUpperCase(); return `<div class="topline app-header"><div class="header-copy"><div class="eyebrow">${kicker}</div><h2>${title}</h2><span class="header-date">${currentDateLabel()}</span></div><div class="header-actions"><span class="offline-badge">${navigator.onLine ? 'online' : 'offline pronto'}</span><button class="profile-avatar" aria-label="Abrir perfil" data-view="profile">${initial}</button></div></div>`; }
+function renderToday() {
+  const status = data.session.status;
+  const completed = status === 'COMPLETED';
+  const action = completed ? 'Ver meu histórico' : 'Conversar comigo';
+  const level = levelInfo();
+  return `<section class="screen">${header('Olá, ' + escapeHtml(data.profile.name))}
+    <div class="hero-card sport-hero"><div class="hero-orbit hero-orbit-one"></div><div class="hero-orbit hero-orbit-two"></div><div class="hero-content"><div class="hero-topline"><div class="eyebrow">${completed ? 'TREINO CONCLUÍDO' : 'SEU PRÓXIMO MOMENTO'}</div><span class="hero-sport-badge">${sportIcon()} ${escapeHtml(data.profile.activity)}</span></div><h2>${completed ? 'Mais um feito.' : 'Vamos começar?'}</h2><p class="hero-subtitle">${completed ? 'Você apareceu por você hoje.' : 'Sem pensar no treino inteiro. Só o próximo passo.'}</p></div><div class="session-bottom"><div><div class="small">Seu horário</div><div class="session-time">${data.profile.time}</div></div><button class="primary" data-today-action>${action} <span>→</span></button></div></div>${completed ? '<div class="feedback-card"><p class="post-message">Sabia que você conseguiria.</p><h3>Como você se sentiu?</h3><div class="feedback-options">' + ['😀 Muito bem', '🙂 Bem', '😐 Normal', '😫 Foi difícil'].map(item => `<button data-feedback="${item}">${item}</button>`).join('') + '</div><p class="small" data-feedback-status>Mais um treino feito. Não foi sobre vontade. Foi sobre aparecer.</p></div>' : ''}${status === 'NOT_COMPLETED' ? '<div class="feedback-card"><p class="post-message">Tudo bem. Amanhã é uma nova oportunidade.</p><h3>Quer me contar o que aconteceu?</h3><div class="feedback-options">' + ['Cansaço', 'Falta de tempo', 'Preguiça', 'Problema pessoal', 'Não estava bem', 'Outro'].map(item => `<button data-not-completed-reason="${item}">${item}</button>`).join('') + '</div><p class="small" data-reason-status>Seu registro fica só para você.</p></div>' : ''}
+    <div class="live-panel"><div class="live-panel-top"><div><div class="eyebrow">PULSO AO VIVO</div><strong data-live-status>${completed ? 'Treino concluído' : 'Conectando ao seu momento...'}</strong></div><span class="live-signal"><i></i><i></i><i></i></span></div><div class="live-time" data-live-clock>--:--:--</div><div class="live-countdown" data-live-countdown>Calculando seu próximo passo...</div></div><div class="today-actions"><button class="map-link" data-view="map">⌖ Abrir mapa ao vivo</button><button class="map-link" data-view="community">♧ Encontrar companhia</button></div>${!completed && trainingDate() <= new Date() && !['NOT_COMPLETED','CANCELLED','RESCHEDULED'].includes(status) ? '<div class="post-training-card"><h3>E aí, você foi?</h3><div class="post-training-actions"><button class="primary" data-post-training="yes">SIM</button><button class="secondary" data-post-training="no">NÃO</button></div></div>' : ''}
+    <div class="section-title"><div class="stat-line"><h3>Seu próximo passo</h3><span class="status-pill status-${statusVisual(status)}"><span aria-hidden="true">${statusVisual(status) === 'success' ? '✓' : statusVisual(status) === 'attention' ? '!' : '•'}</span> ${statusLabel(status)}</span></div></div>
+    <div class="card"><div class="routine-row"><div class="day-dot">${weekDays[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]}</div><div><h3>${completed ? 'Sentir orgulho também conta' : 'Só os próximos cinco minutos'}</h3><p class="small">${completed ? 'Registre como foi para guardar esse momento.' : 'Roupa, tênis e porta. O resto a gente resolve depois.'}</p></div></div></div>
+    <div class="section-title"><h3>Esta semana</h3></div><div class="card weekly-card"><div class="weekly-grid"><div><span class="small">treinos feitos</span><strong>${data.history.filter(item => item.status === 'COMPLETED').length}</strong></div><div><span class="small">meta semanal</span><strong>${data.profile.frequency}</strong></div><div><span class="small">resgates</span><strong>${data.analytics.rescues}</strong></div></div><p class="weekly-note">A presença de hoje vale mais do que a perfeição da semana.</p></div>
+    <div class="motivation-card"><div class="eyebrow">PARA HOJE</div><p>${motivationText()}</p><div class="motivation-actions"><button class="audio-button" data-new-motivation>↻ Outra frase</button><button class="audio-button" data-speak>▶ Ouvir em voz humana</button></div></div>
+    <div class="section-title"><h3>Seu ritmo</h3></div><div class="reward-card"><div class="reward-top"><div><div class="eyebrow">NÍVEL ${level.level}</div><strong>${data.rewards.points} pontos</strong></div><span class="reward-star">✦</span></div><div class="reward-track"><span style="width:${level.progress}%"></span></div><p>${100 - level.progress} pontos para a próxima conquista</p>${data.rewards.badges.length ? `<div class="badge-row">${data.rewards.badges.map(badge => `<span class="badge">✦ ${badge}</span>`).join('')}</div>` : ''}</div>
+    <div class="section-title"><h3>Seu impacto</h3></div><div class="rescue-card"><div><div class="eyebrow">TAXA DE RESGATE</div><strong>${rescueRate()}%</strong><p>${data.analytics.rescues} de ${data.analytics.rescueOpportunities} momentos difíceis viraram presença.</p></div><span class="rescue-icon">↗</span></div>
+  </section>`;
+}
+function trainingDate() { const [hours, minutes] = data.profile.time.split(':').map(Number); const date = new Date(); date.setHours(hours || 19, minutes || 0, 0, 0); return date; }
+function todayKey(date = new Date()) { return date.toISOString().slice(0, 10); }
+function currentDateLabel(date = new Date()) { return date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' }); }
+function sportIcon(activity = data.profile.activity) { return sportIcons[activity] || '✦'; }
+function sportKey(activity = data.profile.activity) { return String(activity).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-'); }
+function historyItemForDay(date) {
+  const key = todayKey(date);
+  return data.history.find(item => item.dateKey === key || item.date === key);
+}
+function selectedDaysForFrequency(frequency, days) {
+  const validDays = [...new Set(days || [])];
+  if (validDays.length) return validDays.slice(0, Math.max(1, frequency));
+  return ['Segunda', 'Quarta', 'Sexta'].slice(0, Math.max(1, frequency));
+}
+function formatCountdown(milliseconds) { const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000)); const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0'); const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0'); const seconds = String(totalSeconds % 60).padStart(2, '0'); return `${hours}:${minutes}:${seconds}`; }
+function updateLivePanel() {
+  const clock = document.querySelector('[data-live-clock]'); const countdown = document.querySelector('[data-live-countdown]'); const status = document.querySelector('[data-live-status]');
+  if (!clock || !countdown || !status) return;
+  const now = new Date(); const difference = trainingDate().getTime() - now.getTime();
+  runPreparationJourney(difference);
+  clock.textContent = now.toLocaleTimeString('pt-BR');
+  if (data.session.status === 'COMPLETED') { status.textContent = 'Treino concluído'; countdown.textContent = 'Você apareceu por você hoje.'; return; }
+  if (difference > 60 * 60 * 1000) { status.textContent = 'Ainda dá tempo de se preparar'; countdown.textContent = `Começamos em ${formatCountdown(difference)}`; }
+  else if (difference > 20 * 60 * 1000) { status.textContent = 'Seu momento está chegando'; countdown.textContent = `Faltam ${formatCountdown(difference)}`; }
+  else if (difference > 0) { status.textContent = 'É hora de começar'; countdown.textContent = `Faltam ${formatCountdown(difference)}`; }
+  else { status.textContent = 'Hora do seu treino'; countdown.textContent = 'Estou aqui com você. Um passo de cada vez.'; }
+}
+function startLiveClock() { window.clearInterval(liveTimer); updateLivePanel(); liveTimer = window.setInterval(updateLivePanel, 1000); }
+function runPreparationJourney(millisecondsUntilTraining) {
+  if (data.session.status === 'COMPLETED' || data.session.status === 'CANCELLED' || data.session.status === 'RESCHEDULED' || data.session.confirmed) return;
+  const minutes = millisecondsUntilTraining / 60000;
+  const steps = [
+    { key: 't60', limit: 60, state: 'PREPARING', text: `E aí, ${data.profile.name}! Hoje tem treino. Vamos começar a nos preparar?` },
+    { key: 't45', limit: 45, state: 'PREPARING', text: 'Já separou sua roupa?' },
+    { key: 't30', limit: 30, state: 'ENGAGED', text: 'Como está sua vontade de ir hoje? De 0 a 10.' },
+    { key: 't20', limit: 20, state: 'OBJECTION', text: 'Percebi que você ainda não foi. Está tudo bem. O que está acontecendo?' }
+  ];
+  const step = steps.find(item => minutes <= item.limit && !data.session.journey[item.key]);
+  if (!step) return;
+  data.session.journey[step.key] = true; data.session.status = step.state; addMessage('app', step.text); save();
+  toast(step.key.toUpperCase() + ' · mensagem enviada');
+  if (currentView === 'today') render();
+}
+function statusLabel(status) { return ({ PREPARING: 'preparação', OBJECTION: 'conversa', PREPARING_TO_GO: 'quase lá', LEFT: 'a caminho', COMPLETED: 'realizado', RESCHEDULED: 'remarcado', CANCELLED: 'cancelado', NOT_COMPLETED: 'não realizado', ENGAGED: 'em conversa' }[status] || 'planejado'); }
+function statusVisual(status) { return ({ PENDING: 'neutral', PREPARING: 'attention', ENGAGED: 'active', OBJECTION: 'conversation', PREPARING_TO_GO: 'active', LEFT: 'active', COMPLETED: 'success', CANCELLED: 'neutral', RESCHEDULED: 'neutral', NOT_COMPLETED: 'neutral' }[status] || 'neutral'); }
+function renderRoutine() { const days = data.profile.days?.length ? data.profile.days : weekDays.slice(0, data.profile.frequency); return `<section class="screen">${header('Minha rotina', 'ROTINA')}<p class="lead">Um plano que cabe na sua vida. Você pode ajustar quando precisar.</p><div class="section-title"><div class="stat-line"><h3>${data.profile.activity}</h3><span class="status-pill">${data.profile.activeSchedule ? 'ativo' : 'pausado'}</span></div></div><div class="card routine-details"><div class="profile-line"><span class="small">Local</span><strong>${escapeHtml(data.profile.location)}</strong></div><div class="profile-line"><span class="small">Duração</span><strong>${data.profile.duration} minutos</strong></div><div class="profile-line"><span class="small">Deslocamento</span><strong>${escapeHtml(data.profile.commuteTime)} · ${escapeHtml(data.profile.transport)}</strong></div></div><div class="section-title"><h3>Dias e horários</h3></div><div class="card">${days.map((day, index) => `<div class="routine-row"><div class="day-dot">${day.slice(0, 3).toUpperCase()}</div><div style="flex:1"><h3>${data.profile.scheduleByDay?.[day] || data.profile.time}</h3><p class="small">${index === 0 ? 'Próximo · ' : ''}${data.profile.activity}</p></div><span class="status-pill">${data.profile.activeSchedule ? 'ativo' : 'pausado'}</span></div>`).join('')}</div><div class="routine-actions"><button class="secondary" data-edit-routine>Editar rotina</button><button class="secondary" data-toggle-routine>${data.profile.activeSchedule ? 'Desativar' : 'Ativar'}</button><button class="secondary" data-add-routine>Adicionar treino</button></div><div class="section-title"><h3>Contexto</h3></div><div class="card"><div class="profile-line"><span class="small">Principal dificuldade</span><strong>${escapeHtml(data.profile.objection)}</strong></div><div class="profile-line"><span class="small">Objetivo</span><strong>${escapeHtml(data.profile.goal)}</strong></div></div></section>`; }
+function meetingPointsForUser() { const activity = data.profile.activity; return meetingPointCatalog.filter(point => point.activities.includes(activity) || point.activities.includes('Outra') || point.id === 'qualquer-cidade'); }
+function renderMap() { const points = meetingPointsForUser(); return `<section class="screen map-screen">${header('Pontos de encontro', 'REDE DE PRESENÇA')}<p class="lead">Encontre pessoas da sua modalidade em locais públicos. Você escolhe quando e com quem conversar.</p><div class="map-safety"><span class="safety-mark">✓</span><div><strong>Privacidade primeiro</strong><p>Mostramos pontos públicos e interesses agrupados. Nunca sua localização exata.</p></div></div><div id="meeting-map" aria-label="Mapa com pontos públicos de encontro"></div><button class="secondary map-fit-button" data-fit-meeting-map>Ver todos os pontos no mapa</button><div class="section-title"><div class="stat-line"><h3>Para ${escapeHtml(data.profile.activity)}</h3><span class="status-pill">${points.length} pontos</span></div></div><div class="meeting-point-list">${points.map(point => { const joined = data.community.meetingPointIds.includes(point.id); const count = point.members + (joined ? 1 : 0); return `<article class="card meeting-point-card"><div class="meeting-point-head"><div class="meeting-point-icon">${sportIcon(data.profile.activity)}</div><div><h3>${escapeHtml(point.name)}</h3><p class="small">${escapeHtml(point.city)}</p></div><span class="point-distance">público</span></div><p class="meeting-point-note">${escapeHtml(point.note)}</p><div class="meeting-point-meta"><span><strong>${count}</strong> interessados</span><span>${escapeHtml(point.activities.slice(0, 2).join(' · '))}</span></div>${point.id === 'qualquer-cidade' ? '<button class="secondary meeting-point-button" disabled>Em breve na sua cidade</button>' : `<button class="${joined ? 'secondary' : 'primary'} meeting-point-button" data-meeting-point="${point.id}">${joined ? 'Você está neste ponto' : 'Quero encontrar pessoas aqui'}</button>`}</article>`; }).join('')}</div></section>`; }
+function initMeetingMap() {
+  if (!window.L || !document.querySelector('#meeting-map')) return;
+  const points = meetingPointsForUser().filter(point => point.id !== 'qualquer-cidade');
+  mapInstance?.remove();
+  mapInstance = L.map('meeting-map').setView([-14.235, -51.925], 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }).addTo(mapInstance);
+  const bounds = [];
+  points.forEach(point => { const coordinates = [point.lat, point.lng]; bounds.push(coordinates); L.marker(coordinates).addTo(mapInstance).bindPopup(`<strong>${escapeHtml(point.name)}</strong><br>${escapeHtml(point.city)}`); });
+  if (bounds.length) mapInstance.fitBounds(bounds, { padding: [24, 24] });
+}
+function fitMeetingMap() { if (mapInstance && currentView === 'map') initMeetingMap(); else toast('Abra o mapa de encontros primeiro'); }
+function distanceBetween(first, second) { const earthRadius = 6371000; const latitudeDelta = (second[0] - first[0]) * Math.PI / 180; const longitudeDelta = (second[1] - first[1]) * Math.PI / 180; const latitude = first[0] * Math.PI / 180; const nextLatitude = second[0] * Math.PI / 180; const a = Math.sin(latitudeDelta / 2) ** 2 + Math.sin(longitudeDelta / 2) ** 2 * Math.cos(latitude) * Math.cos(nextLatitude); return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); }
+function updateTripMetrics() { const distance = document.querySelector('[data-trip-distance]'); const speed = document.querySelector('[data-trip-speed]'); const time = document.querySelector('[data-trip-time]'); if (!distance || !speed || !time) return; distance.textContent = tripState.distanceMeters < 1000 ? `${Math.round(tripState.distanceMeters)} m` : `${(tripState.distanceMeters / 1000).toFixed(2)} km`; speed.textContent = `${tripState.speedKmh.toFixed(1)} km/h`; const seconds = tripState.startedAt ? Math.floor((Date.now() - tripState.startedAt) / 1000) : 0; time.textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`; }
+function initMap() {
+  if (!window.L || !document.querySelector('#live-map')) return;
+  if (locationWatcher !== undefined && navigator.geolocation) navigator.geolocation.clearWatch(locationWatcher);
+  window.clearInterval(tripTimer);
+  tripState = { startedAt: null, lastPosition: null, distanceMeters: 0, speedKmh: 0 };
+  const defaultPosition = [-14.235, -51.925];
+  mapInstance = L.map('live-map').setView(defaultPosition, 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }).addTo(mapInstance);
+  const status = document.querySelector('#location-status');
+  if (!navigator.geolocation) { status.textContent = 'GPS não disponível neste aparelho'; return; }
+  status.textContent = 'Solicitando localização...';
+  locationWatcher = navigator.geolocation.watchPosition(position => {
+    const coordinates = [position.coords.latitude, position.coords.longitude];
+    const now = Date.now();
+    if (!tripState.startedAt) tripState.startedAt = now;
+    if (tripState.lastPosition) { const segment = distanceBetween(tripState.lastPosition.coordinates, coordinates); if (segment > 2 && segment < 500) tripState.distanceMeters += segment; }
+    if (position.coords.speed >= 0) tripState.speedKmh = position.coords.speed * 3.6;
+    tripState.lastPosition = { coordinates, timestamp: now };
+    if (!userMarker) userMarker = L.marker(coordinates).addTo(mapInstance).bindPopup(`${escapeHtml(data.profile.name)}, você está aqui`);
+    else userMarker.setLatLng(coordinates);
+    mapInstance.setView(coordinates, 16);
+    status.textContent = 'Localização atualizada agora';
+    updateTripMetrics();
+  }, () => { status.textContent = 'Permissão de localização necessária'; }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 });
+  tripTimer = window.setInterval(updateTripMetrics, 1000);
+}
+function centerMap() { if (userMarker && mapInstance) mapInstance.setView(userMarker.getLatLng(), 16); else toast('Aguardando sua localização'); }
+function renderHistory() { const items = data.history.length ? data.history : [{ date: 'Hoje', activity: data.profile.activity, status: 'PENDING', reason: 'Seu primeiro registro aparece aqui.' }]; const calendarDays = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM']; return `<section class="screen">${header('O que você já fez', 'HISTÓRICO')}<p class="lead">Sem cobrança. Só um jeito de perceber que você está aparecendo.</p><div class="section-title"><h3>Esta semana</h3></div><div class="card history-calendar">${calendarDays.map((day, index) => { const item = data.history[index]; const status = item?.status || 'PENDING'; return `<div class="calendar-day"><span>${day}</span><strong class="calendar-dot ${status.toLowerCase()}">${status === 'COMPLETED' ? '✓' : status === 'RESCHEDULED' ? '↻' : '·'}</strong></div>`; }).join('')}</div><div class="history-legend"><span>🟢 realizado</span><span>🔴 não realizado</span><span>🟡 remarcado</span></div><div class="section-title"><h3>Atividades recentes</h3></div><div class="card">${items.map(item => `<div class="history-item"><div class="history-icon ${item.status === 'COMPLETED' ? 'done' : 'pending'}">${item.status === 'COMPLETED' ? '✓' : '·'}</div><div style="flex:1"><h3>${escapeHtml(item.activity)}</h3><p class="small">${item.date} · ${item.status === 'COMPLETED' ? 'Realizado' : item.reason || item.status}</p></div><span class="small">${item.status === 'COMPLETED' ? 'feito' : 'pausa'}</span></div>`).join('')}</div></section>`; }
+function renderProfile() { return `<section class="screen">${header('Sobre você', 'PERFIL')}<div class="card profile-block"><div class="profile-line"><span class="small">Nome</span><strong>${escapeHtml(data.profile.name)}</strong></div><div class="profile-line"><span class="small">Atividades</span><strong>${escapeHtml((data.profile.activities || [data.profile.activity]).join(', '))}</strong></div><div class="profile-line"><span class="small">Rotina</span><strong>${data.profile.frequency}x por semana · ${data.profile.time} · ${data.profile.duration} min</strong></div><div class="profile-line"><span class="small">Dias</span><strong>${escapeHtml((data.profile.days || []).join(', ') || 'Não informado')}</strong></div><div class="profile-line"><span class="small">Deslocamento</span><strong>${escapeHtml(data.profile.commuteTime)} · ${escapeHtml(data.profile.transport)}</strong></div><div class="profile-line"><span class="small">Meu porquê</span><strong>${escapeHtml(data.profile.motivation || data.profile.goal)}</strong></div><div class="profile-line"><span class="small">Nível de disciplina</span><strong>${escapeHtml(data.profile.disciplineLevel)}</strong></div><div class="profile-line"><span class="small">Objeções</span><strong>${escapeHtml((data.profile.objections || [data.profile.objection]).join(', '))}</strong></div><div class="profile-line"><span class="small">Minha dificuldade</span><strong>${escapeHtml(data.profile.difficulty)}</strong></div><div class="profile-line"><span class="small">Contexto</span><strong>Trabalho: ${data.profile.workStatus} · Estudos: ${data.profile.studyStatus} · Filhos: ${data.profile.hasChildren}</strong></div></div><div class="section-title"><h3>Preferências</h3></div><div class="card"><div class="profile-line"><span>Notificações</span><button class="status-pill notification-button" data-notifications>${data.profile.notificationsEnabled ? 'desativar' : 'ativar'}</button></div><div class="profile-line"><span>Privacidade</span><span class="small">somente você</span></div></div><div class="section-title"><h3>Voz do Companheiro</h3></div><div class="card voice-card"><p class="small">Escolha uma gravação de uma pessoa real para ouvir sua motivação.</p><label class="voice-upload">Carregar gravação humana<input type="file" accept="audio/*" data-human-voice /></label></div><button class="secondary" style="width:100%;margin-top:18px" data-reset>Refazer onboarding</button><button class="text-action" data-logout>Sair da conta</button></section>`; }
+function renderChat() { const scale = data.session.journey.t30 && !data.session.willingness ? `<div class="will-scale"><span class="small">Como está sua vontade de ir hoje?</span><div>${Array.from({ length: 11 }, (_, score) => `<button data-willingness="${score}">${score}</button>`).join('')}</div></div>` : ''; return `<section class="screen chat-wrap"><div class="topline"><div><div class="eyebrow">CONVERSA</div><h2>Seu Companheiro</h2></div><button class="icon-button" data-view="today">×</button></div><div class="chat-messages">${data.messages.map(message => `<div class="bubble ${message.from === 'user' ? 'user' : 'app'}">${escapeHtml(message.text)}</div>`).join('')}<div class="motivation-message"><div class="eyebrow">UMA MENSAGEM PARA VOCÊ</div><p>${escapeHtml(motivationText())}</p><button class="audio-button" data-speak>▶ Ouvir esta mensagem</button></div></div>${scale}<div class="quick-replies">${['Estou cansado', 'Estou sem vontade', 'Estou atrasado', 'Está frio', 'Está chovendo', 'Estou sem tempo', 'Aconteceu alguma coisa', 'Não quero correr sozinho', 'Vou me preparar', 'Já saí', 'Completei o treino'].map(item => `<button data-reply="${item}">${item}</button>`).join('')}</div><div class="chat-actions"><button class="secondary" data-whatsapp>Compartilhar no WhatsApp ↗</button></div><form class="chat-form" id="chat-form"><input class="text-input" name="message" placeholder="Fale comigo..." autocomplete="off" /><button class="send" aria-label="Enviar">${icon('send')}</button></form></section>`; }
+
+function addMessage(from, text) { data.messages.push({ from, text }); save(); syncMessageToBackend(from, text); }
+function contextualFallbackResponse(text) {
+  const lower = String(text || '').toLowerCase();
+  const name = data.profile.name;
+  data.session.conversationStep = data.session.conversationStep || 0;
+  if (lower.includes('ainda nao') || lower.includes('ainda não')) { data.session.conversationStep = 1; return 'O que est\u00e1 te segurando?'; }
+  if (lower.includes('cansad')) { data.session.conversationStep = 2; return 'Cansado fisicamente ou sem vontade de come\u00e7ar?'; }
+  if (lower.includes('sem vontade') || lower.includes('pregui')) { data.session.conversationStep = 3; return 'Ent\u00e3o n\u00e3o vamos pensar no treino inteiro. S\u00f3 coloca a roupa e o t\u00eanis. Depois voc\u00ea me responde.'; }
+  if (lower === 'ta' || lower === 'tá') { data.session.conversationStep = 4; return 'Pronto. Roupa colocada.'; }
+  if (lower.includes('pronto')) { data.session.conversationStep = 5; return 'Boa. Agora voc\u00ea j\u00e1 venceu a parte mais dif\u00edcil: come\u00e7ar.'; }
+  if (lower.includes('sai') || lower.includes('sa\u00ed') || lower === 'sim') { data.session.conversationStep = 6; data.session.confirmed = true; data.session.status = 'LEFT'; return 'Ent\u00e3o agora \u00e9 s\u00f3 chegar l\u00e1. Vai.'; }
+  return fallbackResponse(text);
+}
+
+function fallbackResponse(text) {
+  const lower = text.toLowerCase(); const name = data.profile.name; let response = `Estou aqui com você, ${name}. O que está te segurando agora?`;
+  if (lower.includes('sozinho') || lower.includes('sozinha') || lower.includes('companhia')) response = `Entendi, ${name}. Você não precisa fazer isso sozinho. Vou procurar alguém com ritmo parecido para vocês começarem com segurança.`;
+  else if (lower.includes('cansad')) response = `Entendi, ${name}. É cansaço físico ou falta de vontade de começar?`;
+  else if (lower.includes('sem vontade') || lower.includes('pregui')) response = `Vamos deixar pequeno, ${name}: roupa e tênis. Depois você decide o próximo passo.`;
+  else if (lower.includes('tempo')) response = `Hoje parece falta de tempo, não falta de disciplina, ${name}. Quer fazer menos tempo ou remarcar?`;
+  else if (lower.includes('frio')) response = `Eu sei, ${name}. Vamos fazer um acordo: chega até a porta. Depois você decide.`;
+  else if (lower.includes('chuva')) response = `Chuva muda o plano, não significa fracasso. Quer adaptar em casa ou remarcar?`;
+  else if (lower.includes('filho') || lower.includes('trabalho')) response = `Entendi, ${name}. Existe outro horário possível hoje? Seu treino pode mudar de horário sem ser cancelado.`;
+  else if (lower.includes('dor') || lower.includes('mal')) response = `Se você está com dor ou não está bem, ${name}, não quero que se force. Cuide de você primeiro.`;
+  else if (lower.includes('preparar')) { data.session.status = 'PREPARING_TO_GO'; response = `Boa, ${name}. Um passo de cada vez. Quando estiver na porta, me avisa.`; }
+  else if (lower.includes('sai')) { data.session.status = 'LEFT'; response = `Boa, ${name}. Agora é só chegar lá. Eu fico com você.`; }
+  return response;
+}
+async function requestAiResponse(text) {
+  const analysis = rememberMessage(text);
+  const aiContext = window.CompanionServices?.AIService?.buildContext({ user_profile: data.profile, training_session: data.session, conversation_history: data.messages, current_state: data.session.status, current_objection: analysis.objection });
+  const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!AI_ENDPOINT || !authToken) return { response_text: contextualFallbackResponse(text), ...analysis };
+  try {
+    const response = await fetch(AI_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` }, body: JSON.stringify({ profile: data.profile, session: data.session, messages: data.messages.slice(-12), memory: data.memory, rewards: data.rewards, local_time: new Date().toISOString(), analysis, persona: COMPANION_PERSONA, instruction: `${COMPANION_PERSONA} Se houver dor ou mal-estar importante, não incentive exercício. Ofereça uma alternativa realista quando houver falta de tempo. Não use frases genéricas de coach.` }) });
+    if (!response.ok) throw new Error('AI service unavailable');
+    const result = await response.json();
+    if (!result.response_text) throw new Error('Empty AI response');
+    const responseText = result.source === 'fallback' ? contextualFallbackResponse(text) : result.response_text;
+    return { ...result, response_text: safeCompanionResponse(responseText) };
+  } catch {
+    return { response_text: contextualFallbackResponse(text), ...analysis };
+  }
+}
+async function replyTo(text) {
+  if (/\b(fui|completei)\b/i.test(text)) { addMessage('user', text); completeSession(); return; }
+  addMessage('user', text); awardPoints(3, 'você conversou'); render();
+  const response = await requestAiResponse(text);
+  if (response.intent === 'community' || response.objection === 'companhia') currentView = 'community';
+  if (response.intent === 'commitment' || response.objection === 'preparação' || response.objection === 'saída') { data.session.confirmed = true; data.session.status = response.objection === 'saída' ? 'LEFT' : 'PREPARING_TO_GO'; }
+  if (response.intent === 'resistance' || response.intent === 'constraint') data.session.status = 'OBJECTION';
+  if (response.suggested_state && ['ENGAGED', 'OBJECTION', 'PREPARING_TO_GO', 'LEFT'].includes(response.suggested_state)) data.session.status = response.suggested_state;
+  addMessage('app', safeCompanionResponse(response.response_text)); save(); syncSessionStatusWithBackend(); render();
+}
+function completeSession() {
+  if (data.session.status === 'COMPLETED') return;
+  data.session.status = 'COMPLETED'; syncSessionStatusWithBackend(); data.rewards.streak += 1;
+  if (data.session.rescueOpportunity && !data.session.rescued) { data.session.rescued = true; data.analytics.rescues += 1; }
+  data.session.completedAt = new Date().toISOString();
+  data.history.unshift({ date: currentDateLabel(), dateKey: todayKey(), activity: data.profile.activity, time: data.profile.time, status: 'COMPLETED', feeling: data.session.feeling || null });
+  addMessage('app', 'Sabia que você conseguiria.');
+  addMessage('app', 'Mais um treino feito. Não foi sobre vontade. Foi sobre aparecer.');
+  awardPoints(40, 'treino concluído'); render();
+}
+
+function renderSummaryV3() {
+  return `<section class="screen summary-screen"><div class="brand-row"><div class="logo"><span class="logo-mark">✦</span> companheiro</div><span class="eyebrow">PERFIL PRONTO</span></div><div class="summary-hero"><div class="hero-shape"></div><h1>Ja entendi um pouco sobre voce.</h1><p class="lead">Nos dias de treino, eu vou estar aqui para ajudar voce a nao desistir.</p></div><div class="card summary-card"><div class="profile-line"><span class="small">Atividade</span><strong>${escapeHtml(data.profile.activity)} · ${data.profile.frequency}x por semana</strong></div><div class="profile-line"><span class="small">Horario</span><strong>${escapeHtml(data.profile.time)}</strong></div><div class="profile-line"><span class="small">Principal dificuldade</span><strong>${escapeHtml(data.profile.difficulty)}</strong></div><div class="profile-line"><span class="small">Objetivo</span><strong>${escapeHtml(data.profile.motivation || data.profile.goal)}</strong></div></div><div class="first-session-banner"><span aria-hidden="true">✓</span><div><strong>Seu primeiro treino esta marcado.</strong><p>Eu vou lembrar de estar com voce no horario combinado.</p></div></div><button class="primary summary-cta" data-enter-app>Fechado. Vamos nessa. <span>→</span></button></section>`;
+}
+
+function renderRoutineV3() {
+  const routines = data.profile.routines || [];
+  const dayLabels = { Segunda: 'SEG', 'Ter\u00e7a': 'TER', Quarta: 'QUA', Quinta: 'QUI', Sexta: 'SEX', 'S\u00e1bado': 'SAB', Domingo: 'DOM' };
+  return `<section class="screen routine-screen">${header('Minha rotina', 'ROTINA')}<p class="lead">Um plano que cabe na sua vida. Ajuste quando precisar.</p><div class="routine-list">${routines.map(routine => `<article class="card routine-card ${routine.active ? '' : 'routine-paused'}"><div class="routine-card-head"><div class="routine-activity"><div class="activity-mark" aria-hidden="true">${routine.activity.slice(0, 1)}</div><div><h3>${escapeHtml(routine.activity)}</h3><span class="status-pill status-${routine.active ? 'active' : 'neutral'}">${routine.active ? 'Ativa' : 'Pausada'}</span></div></div><button class="icon-button" data-routine-edit="${routine.id}" aria-label="Editar ${escapeHtml(routine.activity)}">✎</button></div><div class="routine-meta"><div><span class="small">Dias</span><strong>${routine.days.map(day => dayLabels[day] || day.slice(0, 3).toUpperCase()).join(' · ')}</strong></div><div><span class="small">Horário</span><strong>${escapeHtml(routine.time)}</strong></div><div><span class="small">Duração</span><strong>${routine.duration} min</strong></div></div><div class="routine-context"><span>Local: ${escapeHtml(routine.location || 'Não informado')}</span><span>Chegada: ${escapeHtml(routine.commuteTime || 'Não informado')} · ${escapeHtml(routine.transport || 'Não informado')}</span></div><div class="routine-card-actions"><button class="secondary" data-routine-toggle="${routine.id}">${routine.active ? 'Pausar' : 'Ativar'}</button><button class="secondary" data-routine-delete="${routine.id}" ${routines.length === 1 ? 'disabled title="Mantenha pelo menos uma rotina"' : ''}>Excluir</button></div></article>`).join('')}</div><button class="primary routine-add-button" data-routine-add>+ Adicionar treino</button><div class="section-title"><h3>Legenda da semana</h3></div><div class="card routine-note"><strong>Próximo passo</strong><p class="small">Suas sessões aparecem na Home conforme o horário de cada rotina ativa.</p></div></section>`;
+}
+
+function renderNavMvp() {
+  return `<nav class="bottom-nav" aria-label="Navegacao principal">${[['home','Inicio'],['today','Treino'],['routine','Rotina'],['community','Comunidade'],['profile','Perfil']].map(([id, label]) => `<button class="nav-item ${currentView === id ? 'active' : ''}" data-view="${id}" aria-current="${currentView === id ? 'page' : 'false'}"><span aria-hidden="true">${icon(id)}</span>${label}</button>`).join('')}</nav>`;
+}
+
+function feedPosts() {
+  const activity = data.profile.activity;
+  const posts = data.community.posts || [];
+  return posts.filter(post => post.activity === activity || post.activity === 'Todas' || posts.length < 3);
+}
+
+function renderFeed() {
+  const posts = feedPosts();
+  const completed = data.history.filter(item => item.status === 'COMPLETED').length;
+  const initials = String(data.profile.name || 'Voce').trim().charAt(0).toUpperCase();
+  const checkedIn = data.community.checkedInDate === todayKey();
+  const challengeProgress = Math.min(7, Number(data.community.challengeProgress) || 0);
+  return `<section class="screen feed-screen">${header('Seu movimento', 'INICIO')}<div class="feed-hero"><div><span class="eyebrow">SEU PROXIMO PASSO</span><h1>Hoje voce pode mudar o seu dia.</h1><p>Um pequeno treino, uma escolha e uma comunidade inteira torcendo por voce.</p><div class="feed-hero-actions"><button class="primary" data-view="today">Comecar meu treino</button><button class="hero-link" data-view="community">Encontrar companhia</button></div></div><div class="feed-hero-mark">${sportIcon()}</div></div><div class="impact-card card"><div class="impact-copy"><span class="eyebrow">META DE HOJE</span><h2>So apareca por ${data.profile.duration || 20} minutos.</h2><p>Voce nao precisa estar motivado. Precisa apenas comecar.</p></div><button class="impact-check" data-view="today" aria-label="Comecar meta de hoje">${completed ? 'Feito' : 'Ir'}</button></div><div class="challenge-card card"><div><span class="eyebrow">DESAFIO DA SEMANA</span><h2>7 dias de presenca</h2><p class="small">Faca um check-in todos os dias. Sem perfeicao, so continuidade.</p></div><div class="challenge-side"><strong>${challengeProgress}/7</strong><button class="secondary" data-challenge-check ${checkedIn ? 'disabled' : ''}>${checkedIn ? 'Check-in feito' : data.community.challengeJoined ? 'Fazer check-in' : 'Participar'}</button></div><div class="challenge-progress"><span style="width:${(challengeProgress / 7) * 100}%"></span></div></div><div class="feed-stats"><div><strong>${completed}</strong><span>treinos feitos</span></div><div><strong>${data.rewards.streak}</strong><span>dias de sequencia</span></div><div><strong>${posts.length}</strong><span>pessoas no feed</span></div></div><form class="post-composer card" id="post-form"><div class="composer-head"><div class="profile-avatar">${initials}</div><div><strong>Compartilhe seu momento</strong><span class="small">A comunidade ${escapeHtml(data.profile.activity)} esta com voce.</span></div></div><textarea id="post-text" class="text-input post-text" name="text" maxlength="280" placeholder="Como foi seu treino hoje?" required></textarea><div class="composer-actions"><span class="small">Ate 280 caracteres</span><button class="primary" type="submit">Publicar</button></div></form><div class="feed-toolbar"><div><span class="eyebrow">FEED DA COMUNIDADE</span><h2>Para voce</h2></div><button class="secondary feed-filter" data-view="community">Encontrar pessoas</button></div><div class="feed-list">${posts.map(post => `<article class="feed-post card"><div class="post-head"><div class="post-avatar">${escapeHtml(post.author.charAt(0))}</div><div class="post-author"><strong>${escapeHtml(post.author)}</strong><span class="small">${escapeHtml(post.activity)} · ha ${post.minutes} min</span></div><button class="post-more" aria-label="Mais opcoes">...</button></div><p class="post-copy">${escapeHtml(post.text)}</p><div class="post-meta"><span>${post.likes} curtidas</span><span>${post.comments} comentarios</span></div><div class="post-actions"><button class="post-action ${post.liked ? 'liked' : ''}" data-like-post="${post.id}">${post.liked ? 'Curtido' : 'Curtir'}</button><button class="post-action" data-comment-post="${post.id}">Comentar</button><button class="post-action" data-share-post="${post.id}">Compartilhar</button></div></article>`).join('') || '<div class="card empty-feed"><strong>Seu feed esta pronto.</strong><p class="small">Publique o primeiro momento da sua modalidade.</p></div>'}</div></section>`;
+}
+
+function renderChatV2() {
+  const scale = data.session.journey.t30 && !data.session.willingness ? `<div class="will-scale"><span class="small">Como esta sua vontade de ir hoje?</span><div>${Array.from({ length: 11 }, (_, score) => `<button data-willingness="${score}">${score}</button>`).join('')}</div></div>` : '';
+  const quickReplies = ['Ainda n\u00e3o', 'Estou cansado', 'Estou sem vontade', 'Estou atrasado', 'Estou sem tempo', 'Est\u00e1 frio', 'Est\u00e1 chovendo', 'Aconteceu alguma coisa', 'Vou me preparar', 'Pronto', 'J\u00e1 sa\u00ed', 'Fui'];
+  return `<section class="screen chat-wrap"><div class="chat-topline"><div class="companion-avatar" aria-hidden="true">✦</div><div class="chat-heading"><div class="eyebrow">COMPANHEIRO ONLINE</div><h2>Estou com voce</h2><span class="small">Uma conversa por vez</span></div><button class="icon-button" data-view="today" aria-label="Fechar conversa">×</button></div><div class="chat-messages" aria-live="polite">${data.messages.map(message => `<div class="message-row ${message.from === 'user' ? 'message-user' : 'message-app'}">${message.from === 'user' ? '' : '<div class="message-avatar" aria-hidden="true">✦</div>'}<div class="bubble ${message.from === 'user' ? 'user' : 'app'}">${escapeHtml(message.text)}<time>${message.from === 'user' ? 'voce' : 'agora'}</time></div></div>`).join('')}<div class="motivation-message"><div class="eyebrow">UMA MENSAGEM PARA VOCE</div><p>${escapeHtml(motivationText())}</p><button class="audio-button" data-speak>▶ Ouvir mensagem</button></div></div>${scale}<div class="quick-reply-label small">Respostas rapidas</div><div class="quick-replies">${quickReplies.map(item => `<button data-reply="${item}">${item}</button>`).join('')}</div><div class="chat-actions"><button class="secondary" data-whatsapp>Compartilhar motivacao ↗</button></div><form class="chat-form" id="chat-form"><label class="sr-only" for="chat-message">Escreva uma mensagem</label><input id="chat-message" class="text-input" name="message" placeholder="Fale comigo..." autocomplete="off" /><button class="send" aria-label="Enviar mensagem">${icon('send')}</button></form></section>`;
+}
+
+function renderProfileV4() {
+  const actions = '<button class="secondary customize-entry" data-view="customize">Personalizar esporte e layout</button><button class="secondary install-entry" data-install-app>Instalar app neste aparelho</button><button class="secondary voice-record-entry" data-record-voice>Gravar minha voz</button><button class="secondary admin-entry" data-view="admin">Painel de desenvolvimento</button><button class="danger-action" data-delete-account>Excluir meus dados e conta</button>';
+  return renderProfile().replace('</section>', `${actions}</section>`);
+}
+
+function renderAdmin() {
+  const events = data.analytics.events || [];
+  const completed = data.history.filter(item => item.status === 'COMPLETED').length;
+  const opportunities = data.analytics.rescueOpportunities || 0;
+  return `<section class="screen admin-screen">${header('Validação do MVP', 'PAINEL DEV')}<p class="lead">Visão rápida para acompanhar se o Companheiro está ajudando a pessoa a começar.</p><div class="admin-grid"><div class="card admin-stat"><span class="small">Treinos feitos</span><strong>${completed}</strong></div><div class="card admin-stat"><span class="small">Oportunidades</span><strong>${opportunities}</strong></div><div class="card admin-stat"><span class="small">Resgates</span><strong>${data.analytics.rescues || 0}</strong></div><div class="card admin-stat"><span class="small">Taxa de resgate</span><strong>${rescueRate()}%</strong></div></div><div class="section-title"><h3>Eventos registrados</h3></div><div class="card admin-events">${events.length ? events.slice(-12).reverse().map(event => `<div class="admin-event"><strong>${escapeHtml(event.event_name)}</strong><span class="small">${new Date(event.created_at).toLocaleString('pt-BR')}</span></div>`).join('') : '<p class="small">Os eventos do onboarding e da jornada aparecerão aqui.</p>'}</div><div class="section-title"><h3>Objeções mais frequentes</h3></div><div class="card">${Object.entries(data.memory.objections || {}).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([key, count]) => `<div class="admin-event"><strong>${escapeHtml(key)}</strong><span class="status-pill status-conversation">${count}x</span></div>`).join('') || '<p class="small">Nenhuma objeção registrada ainda.</p>'}</div><div class="section-title"><h3>Consentimento de voz</h3></div><div class="card voice-admin-card"><p class="small">Atualize somente o nome de um consentimento já criado na OpenAI. A chave fica protegida no backend.</p><label class="field-label" for="voice-consent-id">ID do consentimento</label><input id="voice-consent-id" class="text-input" placeholder="cons_1234" autocomplete="off" /><label class="field-label" for="voice-consent-name">Novo nome</label><input id="voice-consent-name" class="text-input" placeholder="Nome da pessoa" autocomplete="name" /><label class="field-label" for="admin-token">Token do painel</label><input id="admin-token" class="text-input" type="password" placeholder="dev-admin-token" autocomplete="off" /><button class="secondary" data-update-voice-consent>Atualizar consentimento</button><p class="small" data-voice-consent-status aria-live="polite"></p></div></section>`;
+}
+
+function renderCustomizeV2() {
+  const c = data.customization;
+  const sports = sportCatalog;
+  return `<section class="screen customize-screen">${header('Modele seu app', 'SEU ESTILO')}<p class="lead">Escolha seu esporte e o visual que combinam com voce. Tudo fica salvo neste aparelho.</p><div class="custom-preview"><div class="logo"><span class="logo-mark sport-logo-mark">${sportIcon(c.sport)}</span> <strong>${escapeHtml(c.appName)}</strong></div><div class="preview-sport">${sportIcon(c.sport)} ${escapeHtml(c.sport)}</div><div class="preview-bubble">Hoje tem ${escapeHtml(c.sport)}. Vamos comecar?</div><span class="status-pill">previa ao vivo</span></div><div class="section-title"><h3>Nome do app</h3></div><div class="card"><label class="field-label" for="custom-app-name">Como quer chamar seu companheiro?</label><input id="custom-app-name" class="text-input" maxlength="24" value="${escapeHtml(c.appName)}" placeholder="Ex.: Meu Ritmo" /></div><div class="section-title"><h3>Seu esporte principal</h3></div><div class="choice-grid custom-sports">${sports.map(sport => `<button class="choice ${c.sport === sport ? 'selected' : ''}" data-custom-sport="${sport}"><span class="sport-choice-icon" aria-hidden="true">${sportIcon(sport)}</span>${sport}</button>`).join('')}</div><div class="section-title"><h3>Layout e cores</h3></div><div class="card"><label class="field-label" for="custom-theme">Tema</label><select id="custom-theme" class="text-input"><option value="light" ${c.theme === 'light' ? 'selected' : ''}>Claro</option><option value="dark" ${c.theme === 'dark' ? 'selected' : ''}>Escuro</option></select><span class="field-label">Cor de destaque</span><div class="accent-grid"><button class="accent-option accent-green ${c.accent === 'green' ? 'selected' : ''}" data-custom-accent="green">Verde</button><button class="accent-option accent-blue ${c.accent === 'blue' ? 'selected' : ''}" data-custom-accent="blue">Azul</button><button class="accent-option accent-orange ${c.accent === 'orange' ? 'selected' : ''}" data-custom-accent="orange">Laranja</button></div></div><button class="primary" style="width:100%;margin-top:18px" data-save-customization>Aplicar meu estilo</button></section>`;
+}
+
+function renderProfileV2() {
+  return `${renderProfile()}<button class="secondary customize-entry" data-view="customize">Personalizar esporte e layout</button>`;
+}
+
+function renderHistoryV2() {
+  const items = data.history.length ? data.history : [{ date: 'Hoje', activity: data.profile.activity, status: 'PENDING', reason: 'Seu primeiro registro aparece aqui.' }];
+  const labels = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'];
+  const monday = new Date();
+  const currentDay = monday.getDay() || 7;
+  monday.setDate(monday.getDate() - currentDay + 1);
+  const calendar = labels.map((label, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    const item = historyItemForDay(date);
+    const status = item?.status || 'PENDING';
+    const mark = status === 'COMPLETED' ? '&#10003;' : status === 'RESCHEDULED' ? '&#8635;' : '&middot;';
+    return `<div class="calendar-day"><span>${label}</span><strong class="calendar-dot ${status.toLowerCase()}">${mark}</strong></div>`;
+  }).join('');
+  return `<section class="screen">${header('Seu historico', 'HISTORICO')}<p class="lead">Sem cobranca. So um jeito de perceber que voce esta aparecendo.</p><div class="section-title"><h3>Esta semana</h3></div><div class="card history-calendar">${calendar}</div><div class="history-legend"><span>realizado</span><span>nao realizado</span><span>remarcado</span></div><div class="section-title"><h3>Atividades recentes</h3></div><div class="card">${items.map(item => `<div class="history-item"><div class="history-icon ${item.status === 'COMPLETED' ? 'done' : 'pending'}">${item.status === 'COMPLETED' ? '&#10003;' : '&middot;'}</div><div style="flex:1"><h3>${escapeHtml(item.activity)}</h3><p class="small">${escapeHtml(item.date)} · ${item.status === 'COMPLETED' ? 'Realizado' : escapeHtml(item.reason || item.status)}</p></div><span class="small">${item.status === 'COMPLETED' ? 'feito' : 'pausa'}</span></div>`).join('')}</div></section>`;
+}
+
+function bindEvents() {
+  document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { currentView = button.dataset.view; render(); }));
+  document.querySelector('#post-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const input = document.querySelector('#post-text');
+    const text = input?.value.trim();
+    if (!text) return;
+    data.community.posts = data.community.posts || [];
+    data.community.posts.unshift({ id: `post-${Date.now()}`, author: data.profile.name || 'Voce', activity: data.profile.activity, text, likes: 0, liked: false, comments: 0, minutes: 0 });
+    try { await apiRequest('/api/social/posts', { method: 'POST', body: JSON.stringify({ text, activity: data.profile.activity }) }); } catch { /* Local post remains available offline. */ }
+    save();
+    render();
+    toast('Publicacao feita no seu feed');
+  });
+  document.querySelector('[data-challenge-check]')?.addEventListener('click', () => {
+    if (!data.community.challengeJoined) { data.community.challengeJoined = true; toast('Voce entrou no desafio da semana'); render(); return; }
+    if (data.community.checkedInDate === todayKey()) return;
+    data.community.checkedInDate = todayKey(); data.community.challengeProgress = Math.min(7, (Number(data.community.challengeProgress) || 0) + 1); awardPoints(5, 'check-in do desafio'); save(); render(); toast('Check-in registrado. Mais um dia presente.');
+  });
+  document.querySelectorAll('[data-like-post]').forEach(button => button.addEventListener('click', async () => {
+    const post = data.community.posts.find(item => item.id === button.dataset.likePost);
+    if (!post) return;
+    post.liked = !post.liked;
+    post.likes = Math.max(0, post.likes + (post.liked ? 1 : -1));
+    try { await apiRequest(`/api/social/posts/${encodeURIComponent(post.id)}/like`, { method: 'POST' }); } catch { /* Local reaction remains available offline. */ }
+    save();
+    render();
+  }));
+  document.querySelectorAll('[data-comment-post]').forEach(button => button.addEventListener('click', async () => {
+    const post = data.community.posts.find(item => item.id === button.dataset.commentPost);
+    if (!post) return;
+    const comment = window.prompt('Escreva um comentario');
+    if (!comment?.trim()) return;
+    post.comments += 1;
+    try { await apiRequest(`/api/social/posts/${encodeURIComponent(post.id)}/comments`, { method: 'POST', body: JSON.stringify({ text: comment.trim() }) }); } catch { /* Local comment count remains available offline. */ }
+    save();
+    toast('Comentario adicionado');
+    render();
+  }));
+  document.querySelectorAll('[data-share-post]').forEach(button => button.addEventListener('click', async () => {
+    const post = data.community.posts.find(item => item.id === button.dataset.sharePost);
+    if (!post) return;
+    const shareText = `${post.author}: ${post.text}`;
+    if (navigator.share) await navigator.share({ title: 'Companheiro', text: shareText }).catch(() => {});
+    else await navigator.clipboard?.writeText(shareText).catch(() => {});
+    toast('Publicacao pronta para compartilhar');
+  }));
+  document.querySelector('#login-form')?.addEventListener('submit', async event => { const form = new FormData(event.currentTarget); const payload = { name: String(form.get('name') || '').trim(), email: String(form.get('email') || '').trim(), password: String(form.get('password') || '') }; if (!payload.email || payload.password.length < 8) return; try { let result; try { result = await apiRequest('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }); } catch { result = await apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: payload.email, password: payload.password }) }); } if (result?.token) localStorage.setItem(AUTH_TOKEN_KEY, result.token); } catch { toast('Sem conexao: o acesso local continua disponivel'); } });
+  document.querySelector('[data-realtime-voice]')?.addEventListener('click', event => toggleRealtimeVoice(event.currentTarget));
+  document.querySelector('[data-onboard-next]')?.addEventListener('click', () => { if (data.onboarded && !data.session.created) { createFirstSession(); toast('Seu primeiro treino esta marcado'); } });
+  document.querySelectorAll('[data-routine-toggle]').forEach(button => button.addEventListener('click', () => { const routine = data.profile.routines.find(item => item.id === button.dataset.routineToggle); if (!routine) return; routine.active = !routine.active; if (routine.id === 'main') data.profile.activeSchedule = routine.active; save(); syncProfileWithBackend(); render(); toast(routine.active ? 'Rotina ativada' : 'Rotina pausada'); }));
+  document.querySelectorAll('[data-routine-delete]').forEach(button => button.addEventListener('click', () => { if (button.disabled || !window.confirm('Excluir esta rotina?')) return; data.profile.routines = data.profile.routines.filter(item => item.id !== button.dataset.routineDelete); save(); syncProfileWithBackend(); render(); toast('Rotina excluída'); }));
+  document.querySelectorAll('[data-routine-edit]').forEach(button => button.addEventListener('click', () => { const routine = data.profile.routines.find(item => item.id === button.dataset.routineEdit); if (!routine) return; routine.time = prompt('Horário da rotina', routine.time) || routine.time; routine.location = prompt('Local da rotina', routine.location) || routine.location; routine.duration = Math.min(240, Math.max(5, Number(prompt('Duração em minutos', routine.duration)) || routine.duration)); if (routine.id === 'main') Object.assign(data.profile, { time: routine.time, location: routine.location, duration: routine.duration }); save(); syncProfileWithBackend(); render(); toast('Rotina atualizada'); }));
+  document.querySelector('[data-routine-add]')?.addEventListener('click', () => { const activity = prompt('Qual atividade adicionar?', 'Corrida')?.trim(); if (!activity) return; const time = prompt('Qual horário?', data.profile.time) || data.profile.time; const routine = { id: `routine-${Date.now()}`, activity, days: [...data.profile.days], time, duration: data.profile.duration, location: data.profile.location, commuteTime: data.profile.commuteTime, transport: data.profile.transport, active: true }; data.profile.routines.push(routine); data.profile.activities = [...new Set([...(data.profile.activities || []), activity])]; save(); syncProfileWithBackend(); render(); toast('Treino adicionado'); });
+  document.querySelector('[data-install-app]')?.addEventListener('click', async () => { if (!deferredInstallPrompt) { toast('Use o menu do navegador para instalar o app'); return; } deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; deferredInstallPrompt = null; render(); });
+  document.querySelector('[data-record-voice]')?.addEventListener('click', async event => { if (voiceRecorder) { voiceRecorder.stop(); event.currentTarget.textContent = 'Processando gravação...'; return; } if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { toast('Gravação não suportada neste aparelho'); return; } try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); voiceChunks = []; voiceRecorder = new MediaRecorder(stream); voiceRecorder.ondataavailable = item => { if (item.data.size) voiceChunks.push(item.data); }; voiceRecorder.onstop = () => { const blob = new Blob(voiceChunks, { type: voiceRecorder.mimeType || 'audio/webm' }); if (humanVoiceAudioUrl) URL.revokeObjectURL(humanVoiceAudioUrl); humanVoiceAudioUrl = URL.createObjectURL(blob); stream.getTracks().forEach(track => track.stop()); voiceRecorder = null; toast('Voz humana gravada e pronta para ouvir'); render(); }; voiceRecorder.start(); event.currentTarget.textContent = 'Parar gravação'; toast('Gravando sua voz...'); } catch { toast('Permissão de microfone não concedida'); } });
+  document.querySelectorAll('[data-custom-sport]').forEach(button => button.addEventListener('click', () => { data.customization.sport = button.dataset.customSport; data.profile.activity = button.dataset.customSport; data.profile.activities = [...new Set([button.dataset.customSport, ...(data.profile.activities || [])])]; render(); }));
+  document.querySelectorAll('[data-custom-accent]').forEach(button => button.addEventListener('click', () => { data.customization.accent = button.dataset.customAccent; applyCustomization(); render(); }));
+  document.querySelector('[data-save-customization]')?.addEventListener('click', () => { const name = document.querySelector('#custom-app-name')?.value.trim(); if (name) data.customization.appName = name.slice(0, 24); data.customization.theme = document.querySelector('#custom-theme')?.value || 'light'; save(); syncProfileWithBackend(); applyCustomization(); toast('Seu app foi personalizado'); render(); });
+  document.querySelector('[data-update-voice-consent]')?.addEventListener('click', async event => { const id = document.querySelector('#voice-consent-id')?.value.trim(); const name = document.querySelector('#voice-consent-name')?.value.trim(); const token = document.querySelector('#admin-token')?.value || 'dev-admin-token'; const status = document.querySelector('[data-voice-consent-status]'); if (!id || !name) { if (status) status.textContent = 'Informe o ID e o novo nome.'; return; } event.currentTarget.disabled = true; try { const response = await fetch(`${API_ORIGIN}/api/admin/voice-consents/${encodeURIComponent(id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': token }, body: JSON.stringify({ name }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'voice_consent_error'); if (status) status.textContent = `Consentimento ${result.id || id} atualizado.`; toast('Consentimento atualizado'); } catch (error) { if (status) status.textContent = error.message === 'configure_openai_api_key' ? 'Configure OPENAI_API_KEY no servidor.' : 'Não foi possível atualizar agora.'; } finally { event.currentTarget.disabled = false; } });
+  document.querySelector('#login-form')?.addEventListener('submit', event => { event.preventDefault(); const form = new FormData(event.target); const name = String(form.get('name') || '').trim(); if (!name) return; data.authenticated = true; data.profile.name = name; data.profile.email = String(form.get('email') || '').trim(); data.messages[0] = { from: 'app', text: `Oi, ${name}. Hoje tem treino. Vamos começar juntos?` }; awardPoints(5, 'primeiro acesso'); currentView = data.onboarded ? 'home' : 'onboarding'; render(); speakWelcome(name); });
+  document.querySelector('[data-enter-app]')?.addEventListener('click', () => { currentView = 'home'; render(); });
+  document.querySelector('[data-onboard-next]')?.addEventListener('click', () => { if (onboardingStep === 2) { data.profile.frequency = Number(document.querySelector('#frequency').value) || 3; data.profile.days = [...document.querySelectorAll('input[name="training-days"]:checked')].map(input => input.value); data.profile.time = document.querySelector('#training-time').value || '19:00'; data.profile.scheduleByDay = Object.fromEntries(data.profile.days.map(day => [day, data.profile.time])); data.profile.duration = Number(document.querySelector('#training-duration').value) || 45; data.profile.commuteTime = document.querySelector('#commute-time').value; data.profile.transport = document.querySelector('#transport').value; } if (onboardingStep === 4) { data.profile.motivation = document.querySelector('#motivation').value; data.profile.personalizedMotivation = document.querySelector('#personalized-motivation').value.trim(); data.profile.goal = document.querySelector('#goal').value.trim() || 'Cuidar de mim'; data.profile.difficulty = document.querySelector('#difficulty').value.trim() || 'Manter constância'; data.profile.disciplineLevel = document.querySelector('#discipline-level').value; data.profile.workStatus = document.querySelector('#work-status').value; data.profile.studyStatus = document.querySelector('#study-status').value; data.profile.hasChildren = document.querySelector('#has-children').value; } if (onboardingStep < 4) onboardingStep++; else { data.onboarded = true; awardPoints(20, 'primeiro passo'); currentView = 'summary'; } render(); });
+  document.querySelectorAll('[data-onboard-choice]').forEach(button => button.addEventListener('click', () => { if (onboardingStep === 1) { const activities = data.profile.activities || []; const selectedActivity = button.dataset.onboardChoice; data.profile.activities = activities.includes(selectedActivity) ? activities.filter(item => item !== selectedActivity) : [...activities, selectedActivity]; if (data.profile.activities.length) data.profile.activity = data.profile.activities[0]; } if (onboardingStep === 3) { const objections = data.profile.objections || []; const selectedObjection = button.dataset.onboardChoice; data.profile.objections = objections.includes(selectedObjection) ? objections.filter(item => item !== selectedObjection) : [...objections, selectedObjection]; data.profile.objection = data.profile.objections[0] || 'Não informado'; } render(); }));
+  document.querySelector('[data-today-action]')?.addEventListener('click', () => data.session.status === 'COMPLETED' ? (currentView = 'history', render()) : (currentView = 'chat', render()));
+  document.querySelectorAll('[data-reply]').forEach(button => button.addEventListener('click', () => { const text = button.dataset.reply; if (text === 'Completei o treino') completeSession(); else replyTo(text); }));
+  document.querySelectorAll('[data-partner]').forEach(button => button.addEventListener('click', () => { const id = button.dataset.partner; if (!data.community.requests.includes(id)) data.community.requests.push(id); save(); button.textContent = 'Convite enviado'; button.disabled = true; toast('Convite enviado com segurança'); }));
+  document.querySelectorAll('[data-rating]').forEach(button => button.addEventListener('click', () => { data.community.ratings[data.profile.activity] = Number(button.dataset.rating); save(); const status = document.querySelector('[data-rating-status]'); if (status) status.textContent = `Avaliação registrada: ${button.dataset.rating}/5. Obrigado por cuidar da comunidade.`; toast('Avaliação registrada'); }));
+  document.querySelectorAll('[data-feedback]').forEach(button => button.addEventListener('click', () => { data.session.feeling = button.dataset.feedback; save(); syncFeedbackToBackend({ completed: true, feeling: data.session.feeling }); const status = document.querySelector('[data-feedback-status]'); if (status) status.textContent = `Sensação registrada: ${button.dataset.feedback}`; toast('Feedback salvo'); }));
+  document.querySelectorAll('[data-not-completed-reason]').forEach(button => button.addEventListener('click', () => { data.session.reasonNotCompleted = button.dataset.notCompletedReason; save(); syncFeedbackToBackend({ completed: false, reason_not_completed: data.session.reasonNotCompleted }); const status = document.querySelector('[data-reason-status]'); if (status) status.textContent = `Motivo registrado: ${button.dataset.notCompletedReason}`; toast('Motivo salvo sem julgamento'); }));
+  document.querySelectorAll('[data-willingness]').forEach(button => button.addEventListener('click', () => { data.session.willingness = Number(button.dataset.willingness); data.session.status = 'ENGAGED'; addMessage('user', `Minha vontade hoje é ${button.dataset.willingness}/10.`); addMessage('app', Number(button.dataset.willingness) < 5 ? 'Entendi. Vamos descobrir o que está pesando, sem pressa.' : 'Boa. Vamos transformar essa vontade em um primeiro passo.'); save(); render(); }));
+  document.querySelectorAll('[data-post-training]').forEach(button => button.addEventListener('click', () => { if (button.dataset.postTraining === 'yes') completeSession(); else { data.session.status = 'NOT_COMPLETED'; addMessage('app', 'Tudo bem. Amanhã é uma nova oportunidade.'); addMessage('app', 'Quer me contar o que aconteceu?'); save(); render(); } }));
+  document.querySelector('[data-whatsapp]')?.addEventListener('click', () => { const text = `Meu Companheiro: ${motivationText()}`; window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener'); });
+  document.querySelector('[data-speak]')?.addEventListener('click', () => { awardPoints(2, 'você se cuidou'); render(); playHumanMotivation(); });
+  document.querySelector('[data-new-motivation]')?.addEventListener('click', refreshMotivation);
+  document.querySelector('[data-notifications]')?.addEventListener('click', async event => { if (data.profile.notificationsEnabled) { data.profile.notificationsEnabled = false; clearNotificationTimers(); event.currentTarget.textContent = 'ativar'; save(); syncProfileWithBackend(); toast('Notificações pausadas'); return; } await enableNotifications(); if (Notification.permission === 'granted') { event.currentTarget.textContent = 'desativar'; save(); } });
+  document.querySelector('[data-human-voice]')?.addEventListener('change', event => { const file = event.target.files?.[0]; if (!file) return; if (humanVoiceAudioUrl) URL.revokeObjectURL(humanVoiceAudioUrl); humanVoiceAudioUrl = URL.createObjectURL(file); toast('Voz humana carregada'); });
+  document.querySelector('[data-center-map]')?.addEventListener('click', centerMap);
+  document.querySelector('[data-fit-meeting-map]')?.addEventListener('click', fitMeetingMap);
+  document.querySelector('#chat-form')?.addEventListener('submit', event => { event.preventDefault(); const input = event.target.message; if (input.value.trim()) replyTo(input.value.trim()); });
+  document.querySelector('[data-edit-routine]')?.addEventListener('click', () => { data.profile.time = prompt('Qual será o novo horário?', data.profile.time) || data.profile.time; data.profile.location = prompt('Onde você pratica?', data.profile.location) || data.profile.location; data.profile.duration = Number(prompt('Duração em minutos?', data.profile.duration)) || data.profile.duration; save(); render(); toast('Rotina atualizada'); });
+  document.querySelector('[data-toggle-routine]')?.addEventListener('click', () => { data.profile.activeSchedule = !data.profile.activeSchedule; save(); render(); toast(data.profile.activeSchedule ? 'Rotina ativada' : 'Rotina pausada'); });
+  document.querySelector('[data-add-routine]')?.addEventListener('click', () => { const activity = prompt('Qual atividade adicionar?', 'Corrida'); if (!activity) return; data.profile.activities = [...new Set([...(data.profile.activities || []), activity])]; save(); render(); toast('Atividade adicionada'); });
+  document.querySelector('[data-reset]')?.addEventListener('click', () => { data = { ...initialData, profile: { ...initialData.profile }, rewards: { ...initialData.rewards } }; onboardingStep = 0; currentView = 'login'; localStorage.removeItem(STORAGE_KEY); render(); });
+  document.querySelector('[data-delete-account]')?.addEventListener('click', async () => { if (!window.confirm('Excluir sua conta e todos os seus dados? Esta ação não pode ser desfeita.')) return; try { await apiRequest('/api/me', { method: 'DELETE' }); } catch { /* Offline mode still removes the local copy. */ } localStorage.removeItem(AUTH_TOKEN_KEY); localStorage.removeItem(STORAGE_KEY); data = { ...initialData, profile: { ...initialData.profile }, rewards: { ...initialData.rewards }, memory: { ...initialData.memory, objections: {} }, analytics: { ...initialData.analytics, events: [] } }; currentView = 'login'; onboardingStep = 0; render(); toast('Conta e dados excluídos'); });
+  document.querySelector('[data-logout]')?.addEventListener('click', () => { data.authenticated = false; save(); currentView = 'login'; render(); });
+}
+function sportLayout(activity = data.profile.activity) {
+  const key = sportKey(activity);
+  const layouts = [
+    { keys: ['corrida', 'ciclismo', 'atletismo', 'triatlo', 'remo', 'canoagem', 'surf', 'natacao', 'stand-up-paddle'], data: { slug: 'endurance', tag: 'Ritmo', title: 'Modalidade de ritmo', summary: 'Layout direto para constancia, preparo rapido e recuperacao.', note: 'Menos friccao, mais repeticao.', focus: ['Aquecimento', 'Cadencia', 'Recuperacao'], metrics: [{ label: 'Foco', value: 'Ritmo' }, { label: 'Entrada', value: 'Rapida' }, { label: 'Saida', value: 'Leve' }] } },
+    { keys: ['academia', 'crossfit', 'ginastica'], data: { slug: 'strength', tag: 'Forca', title: 'Modalidade de forca', summary: 'Estrutura objetiva para carga, execucao e progresso.', note: 'Pouca conversa, mais execucao.', focus: ['Carga', 'Tecnica', 'Progresso'], metrics: [{ label: 'Foco', value: 'Execucao' }, { label: 'Entrada', value: 'Aquecimento' }, { label: 'Saida', value: 'Recuperacao' }] } },
+    { keys: ['yoga', 'pilates', 'danca', 'alongamento'], data: { slug: 'flow', tag: 'Fluxo', title: 'Modalidade de fluidez', summary: 'Interface leve, limpa e sem excesso de etapas.', note: 'Ritmo suave, instrucao simples.', focus: ['Respiracao', 'Mobilidade', 'Presenca'], metrics: [{ label: 'Foco', value: 'Leveza' }, { label: 'Entrada', value: 'Calma' }, { label: 'Saida', value: 'Controle' }] } },
+    { keys: ['boxe', 'jiu-jitsu', 'muay-thai', 'karate', 'taekwondo', 'mma'], data: { slug: 'combat', tag: 'Combate', title: 'Modalidade de combate', summary: 'Clareza, seguranca e aquecimento em primeiro lugar.', note: 'Objetivo, firme e sem ruido.', focus: ['Aquecimento', 'Tecnica', 'Seguranca'], metrics: [{ label: 'Foco', value: 'Tecnica' }, { label: 'Entrada', value: 'Preparacao' }, { label: 'Saida', value: 'Controle' }] } },
+    { keys: ['futebol', 'futsal', 'basquete', 'volei', 'handebol', 'rugby', 'beisebol', 'softbol', 'hóquei', 'hokei', 'criquete', 'polo-aquatico'], data: { slug: 'team', tag: 'Coletivo', title: 'Modalidade coletiva', summary: 'Layout pensado para grupo, horario e coordenacao.', note: 'Mais clareza para combinar com outras pessoas.', focus: ['Grupo', 'Horario', 'Coordenacao'], metrics: [{ label: 'Foco', value: 'Equipe' }, { label: 'Entrada', value: 'Alinhamento' }, { label: 'Saida', value: 'Conexao' }] } },
+    { keys: ['tenis', 'beach-tennis', 'badminton', 'squash'], data: { slug: 'court', tag: 'Quadra', title: 'Modalidade de quadra', summary: 'Boa leitura de ritmo, foco e combinacao de horario.', note: 'Organizacao curta, objetiva e visivel.', focus: ['Ponto', 'Ritmo', 'Timing'], metrics: [{ label: 'Foco', value: 'Precisao' }, { label: 'Entrada', value: 'Pontualidade' }, { label: 'Saida', value: 'Repeticao' }] } },
+    { keys: ['skate', 'escalada', 'patinacao'], data: { slug: 'urban', tag: 'Movimento', title: 'Modalidade de movimento', summary: 'Visual mais leve para uma experiencia dinamica e pratica.', note: 'Fluidez com controle.', focus: ['Equilibrio', 'Percurso', 'Confianca'], metrics: [{ label: 'Foco', value: 'Fluxo' }, { label: 'Entrada', value: 'Livre' }, { label: 'Saida', value: 'Estavel' }] } }
+  ];
+  const normalized = key.replace(/-/g, '');
+  const match = layouts.find(item => item.keys.some(itemKey => normalized.includes(itemKey.replace(/-/g, ''))));
+  return match?.data || { slug: 'direct', tag: 'Direto', title: 'Layout objetivo', summary: 'Uma experiencia limpa para manter foco e constancia.', note: 'Sem excesso, sem distracao.', focus: ['Planejamento', 'Horario', 'Constancia'], metrics: [{ label: 'Foco', value: 'Objetivo' }, { label: 'Entrada', value: 'Curta' }, { label: 'Saida', value: 'Simples' }] };
+}
+function renderModalityPanel(activity = data.profile.activity, context = 'today') {
+  const layout = sportLayout(activity);
+  const contextCopy = { today: 'Use este foco como guia do proximo treino.', routine: 'A rotina ganha clareza quando o layout reflete a modalidade.', customize: 'Este sera o tom visual do seu app.' }[context] || 'O layout se adapta ao seu esporte.';
+  return `<div class="card modality-panel modality-${layout.slug}"><div class="modality-panel-head"><div><span class="eyebrow">${layout.tag}</span><h3>${escapeHtml(layout.title)}</h3></div><span class="status-pill">${escapeHtml(activity)}</span></div><p class="small">${escapeHtml(layout.summary)}</p><div class="modality-grid">${layout.focus.map(item => `<span class="modality-chip">${escapeHtml(item)}</span>`).join('')}</div><div class="modality-metrics">${layout.metrics.map(metric => `<div><span class="small">${escapeHtml(metric.label)}</span><strong>${escapeHtml(metric.value)}</strong></div>`).join('')}</div><p class="modality-note">${escapeHtml(contextCopy)} ${escapeHtml(layout.note)}</p></div>`;
+}
+function renderSummaryV2() {
+  const layout = sportLayout(data.profile.activity);
+  return `<section class="screen summary-screen"><div class="brand-row"><div class="logo"><span class="logo-mark">✦</span> companheiro</div><span class="eyebrow">PERFIL PRONTO</span></div><div class="summary-hero"><div class="hero-shape"></div><div class="eyebrow">LAYOUT DA MODALIDADE</div><h1>${escapeHtml(layout.title)}</h1><p class="lead">${escapeHtml(layout.summary)}</p></div><div class="card summary-card"><div class="profile-line"><span class="small">Atividade</span><strong>${escapeHtml(data.profile.activity)} · ${data.profile.frequency}x por semana</strong></div><div class="profile-line"><span class="small">Horario</span><strong>${escapeHtml(data.profile.time)}</strong></div><div class="profile-line"><span class="small">Principal dificuldade</span><strong>${escapeHtml(data.profile.difficulty)}</strong></div><div class="profile-line"><span class="small">Objetivo</span><strong>${escapeHtml(data.profile.motivation || data.profile.goal)}</strong></div></div>${renderModalityPanel(data.profile.activity, 'customize')}<div class="first-session-banner"><span aria-hidden="true">✓</span><div><strong>Seu primeiro treino esta marcado.</strong><p>Eu vou lembrar de estar com voce no horario combinado.</p></div></div><button class="primary summary-cta" data-enter-app>Fechado. Vamos nessa. <span>→</span></button></section>`;
+}
+function renderRoutineV2() {
+  const routines = data.profile.routines || [];
+  const dayLabels = { Segunda: 'SEG', 'Ter\u00e7a': 'TER', Quarta: 'QUA', Quinta: 'QUI', Sexta: 'SEX', 'S\u00e1bado': 'SAB', Domingo: 'DOM' };
+  return `<section class="screen routine-screen">${header('Minha rotina', 'ROTINA')}<p class="lead">Um plano objetivo para ${escapeHtml(data.profile.activity)}. Ajuste quando precisar.</p>${renderModalityPanel(data.profile.activity, 'routine')}<div class="routine-list">${routines.map(routine => `<article class="card routine-card ${routine.active ? '' : 'routine-paused'}"><div class="routine-card-head"><div class="routine-activity"><div class="activity-mark" aria-hidden="true">${routine.activity.slice(0, 1)}</div><div><h3>${escapeHtml(routine.activity)}</h3><span class="status-pill status-${routine.active ? 'active' : 'neutral'}">${routine.active ? 'Ativa' : 'Pausada'}</span></div></div><button class="icon-button" data-routine-edit="${routine.id}" aria-label="Editar ${escapeHtml(routine.activity)}">✎</button></div><div class="routine-meta"><div><span class="small">Dias</span><strong>${routine.days.map(day => dayLabels[day] || day.slice(0, 3).toUpperCase()).join(' · ')}</strong></div><div><span class="small">Horario</span><strong>${escapeHtml(routine.time)}</strong></div><div><span class="small">Duracao</span><strong>${routine.duration} min</strong></div></div><div class="routine-context"><span>Local: ${escapeHtml(routine.location || 'Nao informado')}</span><span>Chegada: ${escapeHtml(routine.commuteTime || 'Nao informado')} · ${escapeHtml(routine.transport || 'Nao informado')}</span></div><div class="routine-card-actions"><button class="secondary" data-routine-toggle="${routine.id}">${routine.active ? 'Pausar' : 'Ativar'}</button><button class="secondary" data-routine-delete="${routine.id}" ${routines.length === 1 ? 'disabled title="Mantenha pelo menos uma rotina"' : ''}>Excluir</button></div></article>`).join('')}</div><button class="primary routine-add-button" data-routine-add>+ Adicionar treino</button><div class="section-title"><h3>Legenda da semana</h3></div><div class="card routine-note"><strong>Proximo passo</strong><p class="small">Suas sessoes aparecem na Home conforme o horario de cada rotina ativa.</p></div></section>`;
+}
+function renderProfileV3() {
+  const actions = '<button class="secondary customize-entry" data-view="customize">Personalizar esporte e layout</button><button class="secondary install-entry" data-install-app>Instalar app neste aparelho</button><button class="secondary voice-record-entry" data-record-voice>Gravar minha voz</button><button class="secondary admin-entry" data-view="admin">Painel de desenvolvimento</button><button class="danger-action" data-delete-account>Excluir meus dados e conta</button>';
+  return renderProfile().replace('</section>', `${renderModalityPanel(data.profile.activity, 'customize')}${actions}</section>`);
+}
+function renderCustomize() {
+  const c = data.customization;
+  const sports = sportCatalog;
+  return `<section class="screen customize-screen">${header('Modele seu app', 'SEU ESTILO')}<p class="lead">Escolha um visual mais objetivo para a sua modalidade. Tudo fica salvo neste aparelho.</p><div class="custom-preview"><div class="logo"><span class="logo-mark sport-logo-mark">${sportIcon(c.sport)}</span> <strong>${escapeHtml(c.appName)}</strong></div><div class="preview-sport">${sportIcon(c.sport)} ${escapeHtml(c.sport)}</div><div class="preview-bubble">Hoje tem ${escapeHtml(c.sport)}. Vamos comecar?</div><span class="status-pill">previa ao vivo</span></div>${renderModalityPanel(c.sport || data.profile.activity, 'customize')}<div class="section-title"><h3>Nome do app</h3></div><div class="card"><label class="field-label" for="custom-app-name">Como quer chamar seu companheiro?</label><input id="custom-app-name" class="text-input" maxlength="24" value="${escapeHtml(c.appName)}" placeholder="Ex.: Meu Ritmo" /></div><div class="section-title"><h3>Seu esporte principal</h3></div><div class="choice-grid custom-sports">${sports.map(sport => `<button class="choice ${c.sport === sport ? 'selected' : ''}" data-custom-sport="${sport}"><span class="sport-choice-icon" aria-hidden="true">${sportIcon(sport)}</span>${sport}</button>`).join('')}</div><div class="section-title"><h3>Layout e cores</h3></div><div class="card"><label class="field-label" for="custom-theme">Tema</label><select id="custom-theme" class="text-input"><option value="light" ${c.theme === 'light' ? 'selected' : ''}>Claro</option><option value="dark" ${c.theme === 'dark' ? 'selected' : ''}>Escuro</option></select><span class="field-label">Cor de destaque</span><div class="accent-grid"><button class="accent-option accent-green ${c.accent === 'green' ? 'selected' : ''}" data-custom-accent="green">Verde</button><button class="accent-option accent-blue ${c.accent === 'blue' ? 'selected' : ''}" data-custom-accent="blue">Azul</button><button class="accent-option accent-orange ${c.accent === 'orange' ? 'selected' : ''}" data-custom-accent="orange">Laranja</button></div></div><button class="primary" style="width:100%;margin-top:18px" data-save-customization>Aplicar meu estilo</button></section>`;
+}
+render();
+
+
