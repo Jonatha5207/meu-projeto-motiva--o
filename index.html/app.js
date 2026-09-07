@@ -478,7 +478,7 @@ function renderToday() {
     <div class="section-title"><div class="stat-line"><h3>Seu próximo passo</h3><span class="status-pill status-${statusVisual(status)}"><span aria-hidden="true">${statusVisual(status) === 'success' ? '✓' : statusVisual(status) === 'attention' ? '!' : '•'}</span> ${statusLabel(status)}</span></div></div>
     ${renderModalityPanel(data.profile.activity, 'today')}
     <div class="card"><div class="routine-row"><div class="day-dot">${weekDays[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]}</div><div><h3>${completed ? 'Sentir orgulho também conta' : 'Só os próximos cinco minutos'}</h3><p class="small">${completed ? 'Registre como foi para guardar esse momento.' : 'Roupa, tênis e porta. O resto a gente resolve depois.'}</p></div></div></div>
-    <div class="section-title"><h3>Esta semana</h3></div><div class="card weekly-card"><div class="weekly-grid"><div><span class="small">treinos feitos</span><strong>${data.history.filter(item => item.status === 'COMPLETED').length}</strong></div><div><span class="small">meta semanal</span><strong>${data.profile.frequency}</strong></div><div><span class="small">resgates</span><strong>${data.analytics.rescues}</strong></div></div><p class="weekly-note">A presença de hoje vale mais do que a perfeição da semana.</p></div>
+    <div class="section-title"><h3>Esta semana</h3></div><div class="card weekly-card"><div class="weekly-grid"><div><span class="small">treinos feitos</span><strong>${data.history.filter(item => item.status === 'COMPLETED').length}</strong></div><div><span class="small">meta semanal</span><strong>${data.profile.frequency}</strong></div><div><span class="small">resgates</span><strong>${data.analytics.rescues}</strong></div></div>${renderWeeklyChart()}<p class="weekly-note">A presença de hoje vale mais do que a perfeição da semana.</p></div>
     <div class="motivation-card"><div class="eyebrow">PARA HOJE</div><p>${motivationText()}</p><div class="motivation-actions"><button class="audio-button" data-new-motivation>↻ Outra frase</button><button class="audio-button" data-speak>▶ Ouvir em voz humana</button></div></div>
     <div class="section-title"><h3>Seu ritmo</h3></div><div class="reward-card"><div class="reward-top"><div><div class="eyebrow">NÍVEL ${level.level}</div><strong>${data.rewards.points} pontos</strong></div><span class="reward-star">✦</span></div><div class="reward-track"><span style="width:${level.progress}%"></span></div><p>${100 - level.progress} pontos para a próxima conquista</p>${data.rewards.badges.length ? `<div class="badge-row">${data.rewards.badges.map(badge => `<span class="badge">✦ ${badge}</span>`).join('')}</div>` : ''}<p class="small">Você já passou <strong data-usage-time>${formatUsageTime(data.usage?.totalSeconds || 0)}</strong> comigo.</p></div>
     <div class="section-title"><h3>Seu impacto</h3></div><div class="rescue-card"><div><div class="eyebrow">VOCÊ NÃO DESISTIU</div><strong>${rescueRate()}%</strong><p>Das vezes que bateu vontade de desistir, você apareceu em ${data.analytics.rescues} de ${data.analytics.rescueOpportunities}. Isso é força de verdade.</p></div><span class="rescue-icon">↗</span></div>
@@ -506,6 +506,26 @@ function sportKey(activity = data.profile.activity) { return String(activity).no
 function historyItemForDay(date) {
   const key = todayKey(date);
   return data.history.find(item => item.dateKey === key || item.date === key);
+}
+function renderWeeklyChart() {
+  const labels = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'];
+  const now = new Date();
+  const monday = new Date(now);
+  const currentDay = monday.getDay() || 7;
+  monday.setDate(monday.getDate() - currentDay + 1);
+  const todayKeyValue = todayKey();
+  const bars = labels.map((label, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    const item = historyItemForDay(date);
+    const isToday = todayKey(date) === todayKeyValue;
+    const isFuture = date > now && !isToday;
+    const completed = item?.status === 'COMPLETED';
+    const height = completed ? 100 : isFuture ? 6 : 16;
+    const barClass = completed ? 'chart-bar-done' : isToday ? 'chart-bar-today' : '';
+    return `<div class="chart-col"><div class="chart-track"><div class="chart-bar ${barClass}" style="height:${height}%"></div></div><span class="chart-label ${isToday ? 'chart-label-today' : ''}">${label}</span></div>`;
+  }).join('');
+  return `<div class="weekly-chart">${bars}</div>`;
 }
 function selectedDaysForFrequency(frequency, days) {
   const validDays = [...new Set(days || [])];
