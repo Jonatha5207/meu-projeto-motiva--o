@@ -37,10 +37,13 @@ export function createMemoryStore({ dataDir }) {
   const conversationMessages = new Map();
   const socialPosts = [];
   const notificationState = new Map();
+  const connections = [];
+  const directMessages = new Map(); // connectionId -> message[]
 
   function sessionsFor(userId) { if (!userSessions.has(userId)) userSessions.set(userId, []); return userSessions.get(userId); }
   function conversationsFor(userId) { if (!conversations.has(userId)) conversations.set(userId, []); return conversations.get(userId); }
   function stateFor(userId) { if (!notificationState.has(userId)) notificationState.set(userId, {}); return notificationState.get(userId); }
+  function messagesFor(connectionId) { if (!directMessages.has(connectionId)) directMessages.set(connectionId, []); return directMessages.get(connectionId); }
 
   return {
     kind: 'memory',
@@ -128,6 +131,25 @@ export function createMemoryStore({ dataDir }) {
     async incrementPostLikes(id) { const post = socialPosts.find(item => item.id === id); if (post) post.likes += 1; return post || null; },
     async incrementPostComments(id) { const post = socialPosts.find(item => item.id === id); if (post) post.comments += 1; return post || null; },
 
+    async createConnectionRequest(connection) { connections.push(connection); return connection; },
+    async getConnection(id) { return connections.find(item => item.id === id) || null; },
+    async findConnectionBetween(userIdA, userIdB) {
+      return connections.find(item => (item.requester_id === userIdA && item.recipient_id === userIdB) || (item.requester_id === userIdB && item.recipient_id === userIdA)) || null;
+    },
+    async updateConnectionStatus(id, status) {
+      const connection = connections.find(item => item.id === id);
+      if (!connection) return null;
+      connection.status = status;
+      connection.updated_at = new Date().toISOString();
+      return connection;
+    },
+    async listConnectionsForUser(userId) {
+      return connections.filter(item => item.requester_id === userId || item.recipient_id === userId);
+    },
+
+    async listDirectMessages(connectionId) { return messagesFor(connectionId); },
+    async createDirectMessage(message) { messagesFor(message.connection_id).push(message); return message; },
+
     async load() {
       try {
         const saved = JSON.parse(await readFile(dataFile, 'utf8'));
@@ -143,6 +165,8 @@ export function createMemoryStore({ dataDir }) {
         (saved.analyticsEvents || []).forEach(item => analyticsEvents.push(item));
         (saved.socialPosts || []).forEach(item => socialPosts.push(item));
         (saved.notificationState || []).forEach(([id, value]) => notificationState.set(id, value));
+        (saved.connections || []).forEach(item => connections.push(item));
+        (saved.directMessages || []).forEach(([id, value]) => directMessages.set(id, value));
       } catch { /* First run starts with an empty store. */ }
     },
     persist() {
@@ -151,6 +175,7 @@ export function createMemoryStore({ dataDir }) {
         userObjections: [...userObjections.entries()], feedbacks, notifications, deviceTokens: [...deviceTokens.entries()],
         conversations: [...conversations.entries()], conversationMessages: [...conversationMessages.entries()],
         analyticsEvents, socialPosts, notificationState: [...notificationState.entries()],
+        connections, directMessages: [...directMessages.entries()],
       };
       mkdir(dataDir, { recursive: true }).then(() => writeFile(dataFile, JSON.stringify(snapshot, null, 2), 'utf8')).catch(() => {});
     },

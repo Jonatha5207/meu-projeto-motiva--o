@@ -1,6 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { cleanText } from '../lib/http.js';
 import { badRequest, notFound } from '../lib/errors.js';
+import { broadcastRealtime } from '../lib/realtime.js';
+
+const LIVE_PRESENCE_STATES = new Set(['ENGAGED', 'PREPARING_TO_GO', 'LEFT']);
+const PULSE_PHRASES = [
+  name => `${name} também está treinando agora — bora junto?`,
+  name => `${name} acabou de começar. Ninguém treina sozinho hoje.`,
+  name => `${name} está na correria agora. Energia contagiante!`,
+  name => `${name} apareceu. Essa é a parte que mais importa.`,
+];
 
 export const ALLOWED_STATES = new Set(['PENDING', 'PREPARING', 'ENGAGED', 'OBJECTION', 'PREPARING_TO_GO', 'LEFT', 'COMPLETED', 'RESCHEDULED', 'CANCELLED', 'NOT_COMPLETED']);
 
@@ -57,6 +66,20 @@ export function createSessionService({ store, analyticsService, notificationServ
       if (input.reason_not_completed !== undefined) patch.reason_not_completed = cleanText(input.reason_not_completed, 160);
 
       const updated = await store.updateSession(userId, id, patch);
+
+      if (LIVE_PRESENCE_STATES.has(updated.status) && !LIVE_PRESENCE_STATES.has(previousStatus)) {
+        const user = await store.getUserById(userId);
+        if (user) {
+          broadcastRealtime('presence-changed', { userId, name: user.name, activity: updated.activity, status: updated.status });
+          const scheduledTime = new Date(updated.scheduled_at).getTime();
+          const withinLiveWindow = !Number.isNaN(scheduledTime) && Math.abs(scheduledTime - Date.now()) <= 30 * 60000;
+          if (withinLiveWindow) {
+            const phrase = PULSE_PHRASES[Math.floor(Math.random() * PULSE_PHRASES.length)](user.name);
+            broadcastRealtime('room-pulse', { userId, name: user.name, activity: updated.activity, message: phrase });
+          }
+        }
+      }
+
       if (isFinalStatus(updated.status)) await notificationService.cancelPendingForSession(id);
       if (updated.status === 'COMPLETED') await analyticsService.record(userId, 'TRAINING_COMPLETED', {}, id);
       if (updated.status === 'RESCHEDULED') await analyticsService.record(userId, 'TRAINING_RESCHEDULED', {}, id);

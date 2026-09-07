@@ -137,6 +137,20 @@ h3 { font-size: 16px; }
 .trust-badge, .person-badge { display: inline-flex; width: fit-content; border-radius: 20px; padding: 5px 8px; background: var(--sage); color: var(--green); font-size: 10px; font-weight: 700; }
 .person-badge { margin-top: 9px; }
 .partner-button { width: 100%; min-height: 40px; margin-top: 12px; font-size: 12px; }
+.request-card { align-items: center; }
+.request-actions { display: flex; gap: 8px; margin-top: 10px; }
+.request-actions button { flex: 1; min-height: 38px; font-size: 12px; }
+.presence-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 20px; padding: 4px 9px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.presence-badge.presence-online { background: var(--sage); color: var(--green); }
+.presence-badge.presence-live { background: var(--lime); color: var(--green-dark); }
+.presence-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 0 currentColor; animation: presence-pulse 1.8s ease-out infinite; }
+@keyframes presence-pulse { 0% { box-shadow: 0 0 0 0 rgba(46, 101, 73, .5); } 70% { box-shadow: 0 0 0 6px rgba(46, 101, 73, 0); } 100% { box-shadow: 0 0 0 0 rgba(46, 101, 73, 0); } }
+.pulse-strip { display: flex; gap: 8px; overflow-x: auto; margin: 14px 0; padding-bottom: 2px; scrollbar-width: none; }
+.pulse-strip::-webkit-scrollbar { display: none; }
+.pulse-chip { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; padding: 9px 13px; border-radius: 20px; background: var(--sage); color: var(--green-dark); font-size: 12px; font-weight: 600; white-space: nowrap; animation: pulse-chip-in .35s ease-out; }
+.pulse-chip .pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: 0 0 auto; animation: presence-pulse 1.4s ease-out infinite; }
+@keyframes pulse-chip-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.connection-chat-screen .bubble { max-width: 78%; }
 .partner-button:disabled { opacity: .65; cursor: default; }
 .rating-card { margin-top: 0; }
 .rating-stars { display: flex; gap: 6px; margin: 15px 0 12px; }

@@ -22,6 +22,7 @@ import { createConversationService } from './src/services/conversationService.js
 import { createAiService } from './src/services/aiService.js';
 import { createVoiceService } from './src/services/voiceService.js';
 import { createSocialService } from './src/services/socialService.js';
+import { createCommunityService } from './src/services/communityService.js';
 
 process.on('uncaughtException', error => logger.error('uncaught_exception', error));
 process.on('unhandledRejection', error => logger.error('unhandled_rejection', error));
@@ -47,6 +48,7 @@ const conversationService = createConversationService({ store, analyticsService 
 const aiService = createAiService({ logger });
 const voiceService = createVoiceService();
 const socialService = createSocialService({ store, onFeedUpdated: post => broadcastRealtime('feed-updated', post) });
+const communityService = createCommunityService({ store });
 
 const services = {
   analytics: analyticsService,
@@ -59,6 +61,7 @@ const services = {
   ai: aiService,
   voice: voiceService,
   social: socialService,
+  community: communityService,
 };
 
 function isAdminAuthorized(request) {

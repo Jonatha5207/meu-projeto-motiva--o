@@ -159,6 +159,24 @@ create table if not exists user_device_tokens (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+create table if not exists connections (
+  id uuid primary key default uuid_generate_v4(),
+  requester_id uuid not null references users(id) on delete cascade,
+  recipient_id uuid not null references users(id) on delete cascade,
+  status text not null default 'PENDING' check (status in ('PENDING', 'ACCEPTED', 'DECLINED')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (requester_id != recipient_id)
+);
+create unique index if not exists idx_connections_pair on connections (least(requester_id, recipient_id), greatest(requester_id, recipient_id));
+create table if not exists direct_messages (
+  id uuid primary key default uuid_generate_v4(),
+  connection_id uuid not null references connections(id) on delete cascade,
+  sender_id uuid not null references users(id) on delete cascade,
+  text text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_direct_messages_connection on direct_messages(connection_id, created_at);
 create index if not exists idx_sessions_user_date on training_sessions(user_id, scheduled_at);
 create index if not exists idx_schedules_user_weekday on training_schedules(user_id, weekday, scheduled_time);
 create index if not exists idx_events_name on analytics_events(event_name, created_at);

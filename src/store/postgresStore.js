@@ -298,6 +298,45 @@ export function createPostgresStore({ connectionString, ssl = true, logger }) {
       return rows[0] || null;
     },
 
+    async createConnectionRequest(connection) {
+      await query(
+        'insert into connections (id, requester_id, recipient_id, status, created_at, updated_at) values ($1, $2, $3, $4, $5, $5)',
+        [connection.id, connection.requester_id, connection.recipient_id, connection.status, connection.created_at],
+      );
+      return connection;
+    },
+    async getConnection(id) {
+      const { rows } = await query('select * from connections where id = $1', [id]);
+      return rows[0] || null;
+    },
+    async findConnectionBetween(userIdA, userIdB) {
+      const { rows } = await query(
+        'select * from connections where (requester_id = $1 and recipient_id = $2) or (requester_id = $2 and recipient_id = $1)',
+        [userIdA, userIdB],
+      );
+      return rows[0] || null;
+    },
+    async updateConnectionStatus(id, status) {
+      const { rows } = await query('update connections set status = $1, updated_at = now() where id = $2 returning *', [status, id]);
+      return rows[0] || null;
+    },
+    async listConnectionsForUser(userId) {
+      const { rows } = await query('select * from connections where requester_id = $1 or recipient_id = $1', [userId]);
+      return rows;
+    },
+
+    async listDirectMessages(connectionId) {
+      const { rows } = await query('select * from direct_messages where connection_id = $1 order by created_at asc', [connectionId]);
+      return rows;
+    },
+    async createDirectMessage(message) {
+      await query(
+        'insert into direct_messages (id, connection_id, sender_id, text, created_at) values ($1, $2, $3, $4, $5)',
+        [message.id, message.connection_id, message.sender_id, message.text, message.created_at],
+      );
+      return message;
+    },
+
     async load() { /* Postgres não precisa de carga manual: os dados já vivem no banco. */ },
     persist() { /* Cada método já grava direto no banco; não há snapshot a salvar. */ },
     async ping() { await query('select 1', []); return true; },
