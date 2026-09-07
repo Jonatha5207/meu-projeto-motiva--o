@@ -5,10 +5,37 @@ Aplicativo mobile-first para ajudar a pessoa a nao desistir antes de comecar uma
 ## Rodar agora
 
 1. Abra um terminal nesta pasta.
-2. Execute `npm start`.
-3. Acesse `http://localhost:8000`.
+2. `npm install`.
+3. Execute `npm start`.
+4. Acesse `http://localhost:8000`.
 
-O backend usa um armazenamento local de desenvolvimento em `.data/companheiro.json`. Assim, contas, sessoes, conversas, feedbacks e eventos continuam salvos quando o servidor reinicia.
+Sem `DATABASE_URL` definida, o backend usa um armazenamento em memoria persistido em `.data/companheiro.json` (modo dev). Com `DATABASE_URL` definida (ver "Banco de dados" abaixo), ele usa Postgres/Supabase de verdade — o resto do app se comporta identico nos dois modos.
+
+## Arquitetura
+
+O backend (`server.js`) e um entrypoint fino. A logica mora em `src/`:
+
+- `src/lib/` — infraestrutura comum (env, logging estruturado, helpers HTTP, erros, crypto).
+- `src/store/` — camada de armazenamento. `memoryStore.js` (dev, sem dependencias externas) e `postgresStore.js` (producao) implementam a mesma interface; `src/store/index.js` escolhe qual usar com base em `DATABASE_URL`.
+- `src/services/` — regra de negocio (auth, perfil, sessao/maquina de estados, objecoes, conversas, IA, notificacoes, analytics, social, voz), sem nada de HTTP misturado.
+- `src/routes/` — traduz HTTP para chamadas de servico.
+
+O frontend (`index.html/app.js`) nao mudou: todas as rotas mantem o mesmo path, verbo e formato de resposta.
+
+## Banco de dados (Postgres/Supabase)
+
+1. Crie um projeto no [Supabase](https://supabase.com) (ou use um Postgres proprio) e copie a connection string.
+2. Coloque em `DATABASE_URL` no `.env`.
+3. Rode `npm run migrate` — aplica `schema.sql` (idempotente, seguro rodar de novo).
+4. `npm start`. O log de inicializacao mostra `"store":"postgres"` quando a conexao funciona.
+
+**Importante:** a implementacao Postgres (`src/store/postgresStore.js`) foi escrita e revisada com cuidado, mas nao pode ser testada contra um banco real no ambiente onde foi desenvolvida (sem Docker/Postgres disponivel). Rode a bateria de smoke test (registro, login, sessao, transicao de estado, chat, notificacoes, admin) antes de considerar producao-ready.
+
+Sobre Row Level Security: como o backend fala com o Postgres via `DATABASE_URL` (conexao direta, com toda a autorizacao ja aplicada em `src/services/`), politicas de RLS nao se aplicam a essa conexao — so fariam sentido se o frontend passasse a falar direto com a API do Supabase (hoje ele so fala com este backend). Ver o comentario no topo de `schema.sql`.
+
+## Docker
+
+`Dockerfile` e `docker-compose.yml` estao prontos (app + Postgres local), mas tambem nao puderam ser testados neste ambiente por falta de Docker. Revise antes do primeiro uso real: `docker compose up --build`.
 
 ## Voz e IA
 
@@ -59,4 +86,4 @@ Abra `http://localhost:8000/#admin` no navegador. O token local padrao e `dev-ad
 
 ## Producao
 
-O arquivo `schema.sql` ja organiza as tabelas e politicas RLS do MVP. Para producao, conecte o backend ao Supabase/Postgres, troque o armazenamento local, configure push notifications e use HTTPS.
+`schema.sql` organiza as tabelas do MVP (ver nota sobre RLS acima). Para producao: conecte `DATABASE_URL` a um Postgres/Supabase real (`npm run migrate`), configure as chaves VAPID e `OPENAI_API_KEY`, defina `ADMIN_TOKEN` proprio, e sirva atras de HTTPS (Web Push exige contexto seguro fora de `localhost`).

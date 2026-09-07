@@ -1,0 +1,37 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: 8000
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-dev-admin-token}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contato@companheiro.app}
+      # Comente estas duas linhas (ou apague) para rodar em modo memória, sem Postgres.
+      DATABASE_URL: postgres://companheiro:companheiro@db:5432/companheiro
+      DATABASE_SSL: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: companheiro
+      POSTGRES_PASSWORD: companheiro
+      POSTGRES_DB: companheiro
+    ports:
+      - "5432:5432"
+    volumes:
+      - companheiro-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U companheiro"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  companheiro-db:

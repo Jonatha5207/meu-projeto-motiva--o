@@ -1,5 +1,15 @@
 create extension if not exists "uuid-ossp";
 
+-- Nota sobre Row Level Security: este backend (server.js/src/store/postgresStore.js)
+-- se conecta ao Postgres diretamente via DATABASE_URL (um papel com privilégios
+-- normais de aplicação), e é o único cliente que fala com o banco — toda autorização
+-- (usuário só vê seus próprios dados) já é aplicada em src/services/*.js antes de
+-- qualquer query. Políticas de RLS amarradas a auth.uid() só fariam sentido se o
+-- frontend passasse a falar direto com a API REST/anon-key do Supabase (hoje ele só
+-- fala com este backend). Se esse dia chegar, adicione RLS aqui *e* migre a
+-- autenticação para o Supabase Auth ao mesmo tempo — uma política de RLS sem esse
+-- contexto seria decorativa e passaria uma falsa sensação de segurança.
+
 create table if not exists users (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
@@ -16,23 +26,13 @@ create table if not exists activities (
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
+-- O onboarding evoluiu para campos livres (multiplas atividades/rotinas por usuario,
+-- local, deslocamento etc.) que crescem com frequencia. Em vez de perseguir isso com
+-- colunas rigidas e migracoes constantes, guardamos o perfil como jsonb e mantemos
+-- como coluna real só o que o agendador de notificacoes precisa filtrar de verdade.
 create table if not exists user_profiles (
   user_id uuid primary key references users(id) on delete cascade,
-  id uuid not null default uuid_generate_v4(),
-  primary_activity_id uuid references activities(id) on delete set null,
-  activities jsonb not null default '[]',
-  discipline_level text,
-  frequency integer,
-  days jsonb not null default '[]',
-  scheduled_time time,
-  duration_minutes integer,
-  personalized_motivation text,
-  goal text,
-  difficulty text,
-  objections jsonb not null default '[]',
-  work_status text,
-  study_status text,
-  has_children boolean,
+  data jsonb not null default '{}',
   notifications_enabled boolean not null default true,
   updated_at timestamptz not null default now()
 );
@@ -85,6 +85,8 @@ create table if not exists training_sessions (
   status text not null default 'PENDING',
   rescue_opportunity boolean not null default false,
   rescued boolean not null default false,
+  feeling text,
+  reason_not_completed text,
   started_at timestamptz,
   completed_at timestamptz,
   cancelled_at timestamptz,
