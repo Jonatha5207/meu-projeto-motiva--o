@@ -242,6 +242,9 @@ h3 { font-size: 16px; font-weight: 700; }
 .heart-burst { position: fixed; z-index: 50; transform: translate(-50%, -50%); font-size: 64px; pointer-events: none; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .3)); animation: heart-pop .7s ease; }
 @keyframes heart-pop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.4); } 22% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 45% { transform: translate(-50%, -50%) scale(.95); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1); } }
 .device-card { display: grid; gap: 14px; }
+.device-row button[disabled] { opacity: .5; cursor: not-allowed; }
+.heart-rate-live { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 12px; font-weight: 700; color: var(--green-dark); }
+.heart-rate-dot { width: 8px; height: 8px; border-radius: 50%; background: #d64545; animation: presence-pulse 1s ease-out infinite; }
 .device-row { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
 .device-row:last-of-type { border-bottom: 0; padding-bottom: 0; }
 .device-icon { display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; border-radius: 14px; background: var(--sage); font-size: 19px; }
@@ -570,10 +573,12 @@ body { background-image: radial-gradient(circle at 14% 8%, rgba(215, 237, 119, .
 .challenge-side .secondary:disabled { opacity: .8; }
 .challenge-progress { position: absolute; right: 20px; bottom: 9px; left: 20px; height: 4px; overflow: hidden; border-radius: 10px; background: rgba(255,255,255,.15); }
 .challenge-progress span { display: block; height: 100%; border-radius: inherit; background: var(--lime); transition: width .35s ease; }
-.feed-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 22px; }
-.feed-stats div { display: grid; gap: 3px; padding: 13px 10px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
-.feed-stats strong { color: var(--green-dark); font-size: 21px; letter-spacing: -.04em; }
-.feed-stats span { color: var(--muted); font-size: 10px; line-height: 1.2; }
+.stat-pills { display: flex; gap: 8px; overflow-x: auto; margin: 14px 0 22px; padding-bottom: 2px; scrollbar-width: none; }
+.stat-pills::-webkit-scrollbar { display: none; }
+.stat-pill-chip { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; padding: 10px 14px; border-radius: 999px; background: var(--brand-dark); color: white; white-space: nowrap; }
+.stat-pill-icon { font-size: 14px; }
+.stat-pill-chip strong { font-size: 15px; font-weight: 800; letter-spacing: -.02em; }
+.stat-pill-label { color: rgba(255,255,255,.7); font-size: 11px; font-weight: 600; }
 .post-composer { display: grid; gap: 15px; padding: 18px; }
 .composer-head, .post-head { display: flex; align-items: center; gap: 11px; }
 .composer-head > div:last-child, .post-author { display: grid; gap: 3px; }
@@ -595,4 +600,4 @@ body { background-image: radial-gradient(circle at 14% 8%, rgba(215, 237, 119, .
 .post-action { min-height: 38px; border: 0; border-radius: 11px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 700; }
 .post-action:hover, .post-action.liked { background: var(--sage); color: var(--green-dark); }
 .empty-feed { text-align: center; }
-@media (max-width: 380px) { .feed-hero { padding: 20px; } .feed-hero-mark { display: none; } .feed-stats span { font-size: 9px; } .feed-toolbar { align-items: start; flex-direction: column; } }
+@media (max-width: 380px) { .feed-hero { padding: 20px; } .feed-hero-mark { display: none; } .stat-pill-chip { padding: 9px 11px; } .feed-toolbar { align-items: start; flex-direction: column; } }
