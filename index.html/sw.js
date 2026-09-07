@@ -1,4 +1,4 @@
-const CACHE_NAME = 'companheiro-offline-v6';
+const CACHE_NAME = 'companheiro-offline-v7';
 const APP_SHELL = ['./', './index.html', './styles.css', './app.js', './services.js', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', event => {
