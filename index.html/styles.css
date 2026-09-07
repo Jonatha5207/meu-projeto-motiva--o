@@ -151,6 +151,9 @@ h3 { font-size: 16px; }
 .pulse-chip .pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: 0 0 auto; animation: presence-pulse 1.4s ease-out infinite; }
 @keyframes pulse-chip-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .connection-chat-screen .bubble { max-width: 78%; }
+.meeting-point-nav { display: flex; gap: 8px; margin-top: 10px; }
+.nav-link { flex: 1; display: inline-flex; align-items: center; justify-content: center; min-height: 38px; border-radius: 14px; padding: 0 10px; background: var(--sage); color: var(--green-dark); font-size: 12px; font-weight: 700; text-decoration: none; text-align: center; }
+.nav-link:hover { background: var(--lime); }
 .partner-button:disabled { opacity: .65; cursor: default; }
 .rating-card { margin-top: 0; }
 .rating-stars { display: flex; gap: 6px; margin: 15px 0 12px; }
@@ -264,7 +267,12 @@ h3 { font-size: 16px; }
 .will-scale button { border: 0; border-radius: 8px; padding: 8px 0; background: var(--card); color: var(--green-dark); font-size: 11px; }
 .will-scale button:hover { background: var(--lime); }
 .chat-actions { padding: 0 0 10px; }
-.realtime-voice-button { display: block; width: 100%; margin: 0 0 12px; border: 1px solid var(--green); background: var(--sage); color: var(--green-dark); }
+.realtime-voice-button { display: block; width: 100%; min-height: 52px; margin: 0; border: none; background: linear-gradient(135deg, var(--green), var(--green-dark)); color: white; font-weight: 700; font-size: 14px; box-shadow: 0 10px 22px rgba(23, 57, 42, .22); }
+.chat-live-strip { display: grid; gap: 8px; padding: 12px 0; }
+.workout-timer-badge { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--green-dark); }
+.workout-timer-dot { width: 8px; height: 8px; border-radius: 50%; background: #d64545; animation: presence-pulse 1.2s ease-out infinite; }
+.live-panel .workout-timer-badge { margin-top: 6px; color: var(--lime); }
+.live-panel .workout-timer-dot { background: #ff6b6b; }
 .chat-actions .secondary { width: 100%; min-height: 45px; }
 .chat-form { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
 .chat-form .text-input { min-width: 0; }
@@ -512,7 +520,10 @@ body { background-image: radial-gradient(circle at 14% 8%, rgba(215, 237, 119, .
 .impact-copy h2 { max-width: 250px; margin-top: 3px; font-size: 21px; line-height: 1.05; letter-spacing: -.04em; }
 .impact-copy p { color: var(--muted); font-size: 12px; }
 .impact-check { display: grid; place-items: center; width: 54px; height: 54px; flex: 0 0 54px; border: 0; border-radius: 18px; background: var(--green-dark); color: var(--lime); font-weight: 800; }
-.challenge-card { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 16px; overflow: hidden; padding: 18px 20px 24px; background: var(--green-dark); color: white; }
+.challenge-card { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; overflow: hidden; padding: 18px 20px 24px; background: var(--green-dark); color: white; }
+.challenge-period-tabs { order: -1; display: flex; gap: 6px; width: 100%; }
+.period-tab { flex: 1; min-height: 32px; padding: 0 6px; border: 1px solid rgba(255,255,255,.22); border-radius: 12px; background: transparent; color: #bdd3c2; font-size: 11px; font-weight: 700; }
+.period-tab.selected { background: var(--lime); border-color: var(--lime); color: var(--green-dark); }
 .challenge-card .eyebrow { color: var(--lime); }
 .challenge-card h2 { margin: 4px 0; font-size: 21px; letter-spacing: -.04em; }
 .challenge-card p { color: #bdd3c2; }
