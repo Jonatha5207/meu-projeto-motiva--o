@@ -2,17 +2,20 @@ import { cleanText } from '../lib/http.js';
 import { AppError, badRequest } from '../lib/errors.js';
 import { OPENAI_TIMEOUT_MS } from './aiService.js';
 
+export const TTS_VOICES = ['coral', 'alloy', 'onyx', 'nova', 'shimmer', 'echo', 'fable'];
+
 export function createVoiceService() {
   return {
     async motivationAudio(input) {
       const text = cleanText(input.text, 4096);
       if (!text) throw badRequest('invalid_audio_text');
       if (!process.env.OPENAI_API_KEY) throw new AppError(501, 'configure_openai_api_key');
+      const requestedVoice = TTS_VOICES.includes(input.voice) ? input.voice : (process.env.OPENAI_TTS_VOICE || 'coral');
       try {
         const providerResponse = await fetch('https://api.openai.com/v1/audio/speech', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-          body: JSON.stringify({ model: process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts', voice: process.env.OPENAI_TTS_VOICE || 'coral', input: text, instructions: 'Fale em português brasileiro, com tom humano, acolhedor, calmo e breve.', response_format: 'mp3' }),
+          body: JSON.stringify({ model: process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts', voice: requestedVoice, input: text, instructions: 'Fale em português brasileiro, com tom humano, acolhedor, calmo e breve.', response_format: 'mp3' }),
           signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
         });
         if (!providerResponse.ok) throw new AppError(502, 'tts_provider_unavailable');

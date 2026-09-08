@@ -5,6 +5,7 @@ const AI_ENDPOINT = window.COMPANHEIRO_CONFIG?.aiEndpoint || (API_ORIGIN ? `${AP
 const HUMAN_AUDIO_ENDPOINT = window.COMPANHEIRO_CONFIG?.audioEndpoint || (API_ORIGIN ? `${API_ORIGIN}/api/motivation-audio` : '');
 const AUTH_TOKEN_KEY = 'companheiro-auth-token';
 const GUILT_PHRASES = ['você está falhando', 'você está decepcionando', 'você é preguiçoso', 'você é preguiçosa', 'tenha vergonha', 'todo mundo está treinando', 'você nunca vai conseguir'];
+const TTS_VOICE_LABELS = [['coral', 'Coral (calorosa)'], ['nova', 'Nova (energética)'], ['shimmer', 'Shimmer (suave)'], ['alloy', 'Alloy (neutra)'], ['onyx', 'Onyx (grave)'], ['echo', 'Echo (masculina)'], ['fable', 'Fable (narrativa)']];
 const weekDays = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'];
 const motivationalPhrases = [
   'Você não precisa sentir vontade. Só precisa dar o próximo passo.',
@@ -42,7 +43,7 @@ const sportMotivations = {
 const initialData = {
   authenticated: false,
   onboarded: false,
-  profile: { name: 'João', activity: 'Academia', activities: [], frequency: 3, days: ['Segunda', 'Quarta', 'Sexta'], scheduleByDay: {}, time: '19:00', duration: 45, location: 'Não informado', commuteTime: 'Não informado', transport: 'Não informado', activeSchedule: true, notificationsEnabled: false, goal: 'Cuidar de mim', motivation: '', personalizedMotivation: '', difficulty: 'Manter constância', objections: [], objection: 'Cansaço', disciplineLevel: 'Estou começando agora.', workStatus: 'Não informado', studyStatus: 'Não informado', hasChildren: 'Não informado' },
+  profile: { name: 'João', activity: 'Academia', activities: [], frequency: 3, days: ['Segunda', 'Quarta', 'Sexta'], scheduleByDay: {}, time: '19:00', duration: 45, location: 'Não informado', commuteTime: 'Não informado', transport: 'Não informado', activeSchedule: true, notificationsEnabled: false, goal: 'Cuidar de mim', motivation: '', personalizedMotivation: '', difficulty: 'Manter constância', objections: [], objection: 'Cansaço', disciplineLevel: 'Estou começando agora.', workStatus: 'Não informado', studyStatus: 'Não informado', hasChildren: 'Não informado', voicePreference: 'coral' },
   session: { status: 'PENDING', date: new Date().toISOString(), activity: 'Academia', time: '19:00', journey: {}, confirmed: false },
   messages: [{ from: 'app', text: 'Hoje tem treino. Vamos começar a nos preparar?' }],
   history: [],
@@ -324,7 +325,7 @@ async function playHumanMotivation(text = motivationText()) {
   }
   if (!HUMAN_AUDIO_ENDPOINT) { speakMotivation(text); return; }
   try {
-    const audioBlob = await apiAudioRequest('/api/motivation-audio', { method: 'POST', body: JSON.stringify({ text, language: 'pt-BR', voice: 'friendly' }) });
+    const audioBlob = await apiAudioRequest('/api/motivation-audio', { method: 'POST', body: JSON.stringify({ text, language: 'pt-BR', voice: data.profile.voicePreference || 'coral' }) });
     const audioUrl = URL.createObjectURL(audioBlob);
     const audio = new Audio(audioUrl); await audio.play(); toast('Áudio com voz humana');
   } catch { speakMotivation(text); }
@@ -723,11 +724,13 @@ function renderPickupEventsSection() {
   return `<div class="section-title"><div class="stat-line"><h3>Jogos marcados</h3><span class="status-pill">${relevant.length}</span></div></div><button class="secondary" style="width:100%;margin-bottom:14px" data-create-pickup-event>+ Marcar um jogo de ${escapeHtml(data.profile.activity)}</button><div class="pickup-event-list">${relevant.length ? relevant.map(renderPickupEventCard).join('') : '<p class="small">Nenhum jogo marcado ainda para essa modalidade. Que tal marcar o primeiro?</p>'}</div>`;
 }
 async function openCreatePickupEventModal() {
+  const location = await openLocationPickerModal();
+  if (!location) return;
   const values = await openModal({
     title: 'Marcar um jogo',
+    message: `Local: ${location.name}`,
     fields: [
       { id: 'activity', label: 'Modalidade', type: 'select', options: sportCatalog, value: data.profile.activity },
-      { id: 'location_name', label: 'Local' },
       { id: 'scheduled_at', label: 'Data e hora', type: 'datetime-local' },
       { id: 'duration_minutes', label: 'Duração (minutos)', value: 60, type: 'number', min: 15, max: 480 },
       { id: 'price_cents', label: 'Preço por pessoa (R$, 0 se for grátis)', value: 0, type: 'number', min: 0 },
@@ -738,11 +741,10 @@ async function openCreatePickupEventModal() {
   if (!values) return;
   const activity = values.activity?.trim();
   const title = `${activity} com a galera`;
-  const locationName = values.location_name?.trim();
-  if (!activity || !locationName || !values.scheduled_at) { toast('Preencha modalidade, local e data'); return; }
+  if (!activity || !values.scheduled_at) { toast('Preencha modalidade e data'); return; }
   try {
     await apiRequest('/api/pickup-events', { method: 'POST', body: JSON.stringify({
-      title, activity, location_name: locationName,
+      title, activity, location_name: location.name, lat: location.lat, lng: location.lng,
       scheduled_at: new Date(values.scheduled_at).toISOString(),
       duration_minutes: Number(values.duration_minutes) || 60,
       price_cents: Math.round((Number(values.price_cents) || 0) * 100),
@@ -784,6 +786,12 @@ function initMeetingMap() {
   const bounds = [];
   points.forEach(point => { const coordinates = [point.lat, point.lng]; bounds.push(coordinates); L.marker(coordinates).addTo(mapInstance).bindPopup(`<strong>${escapeHtml(point.name)}</strong><br>${escapeHtml(point.city)}`); });
   liveLocationPeers.forEach(peer => { const coordinates = [peer.lat, peer.lng]; bounds.push(coordinates); L.circleMarker(coordinates, { radius: 9, color: '#d64545', fillColor: '#d64545', fillOpacity: .85, weight: 2 }).addTo(mapInstance).bindPopup(`<strong>${escapeHtml(peer.name || 'Alguém')}</strong><br>${escapeHtml(peer.activity || '')} · ao vivo agora`); });
+  pickupEvents.filter(event => Number.isFinite(event.lat) && Number.isFinite(event.lng)).forEach(event => {
+    const coordinates = [event.lat, event.lng];
+    bounds.push(coordinates);
+    L.marker(coordinates, { icon: L.divIcon({ className: 'pickup-map-pin', html: '⚽', iconSize: [30, 30] }) }).addTo(mapInstance)
+      .bindPopup(`<strong>${escapeHtml(event.title)}</strong><br>${escapeHtml(event.location_name)}<br>${new Date(event.scheduled_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`);
+  });
   if (bounds.length) mapInstance.fitBounds(bounds, { padding: [24, 24] });
 }
 let liveLocationSharing = false;
@@ -906,7 +914,7 @@ function disconnectHeartRateMonitor() {
   save();
   render();
 }
-function renderProfile() { return `<section class="screen">${header('Sobre você', 'PERFIL')}${renderModalityPanel(data.profile.activity, 'customize')}<div class="card profile-block"><div class="profile-line"><span class="small">Nome</span><strong>${escapeHtml(data.profile.name)}</strong></div><div class="profile-line"><span class="small">Atividades</span><strong>${escapeHtml((data.profile.activities || [data.profile.activity]).join(', '))}</strong></div><div class="profile-line"><span class="small">Rotina</span><strong>${data.profile.frequency}x por semana · ${data.profile.time} · ${data.profile.duration} min</strong></div><div class="profile-line"><span class="small">Dias</span><strong>${escapeHtml((data.profile.days || []).join(', ') || 'Não informado')}</strong></div><div class="profile-line"><span class="small">Deslocamento</span><strong>${escapeHtml(data.profile.commuteTime)} · ${escapeHtml(data.profile.transport)}</strong></div><div class="profile-line"><span class="small">Meu porquê</span><strong>${escapeHtml(data.profile.motivation || data.profile.goal)}</strong></div><div class="profile-line"><span class="small">Nível de disciplina</span><strong>${escapeHtml(data.profile.disciplineLevel)}</strong></div><div class="profile-line"><span class="small">Objeções</span><strong>${escapeHtml((data.profile.objections || [data.profile.objection]).join(', '))}</strong></div><div class="profile-line"><span class="small">Minha dificuldade</span><strong>${escapeHtml(data.profile.difficulty)}</strong></div><div class="profile-line"><span class="small">Contexto</span><strong>Trabalho: ${data.profile.workStatus} · Estudos: ${data.profile.studyStatus} · Filhos: ${data.profile.hasChildren}</strong></div></div><div class="section-title"><h3>Preferências</h3></div><div class="card"><div class="profile-line"><span>Notificações</span><button class="status-pill notification-button" data-notifications>${data.profile.notificationsEnabled ? 'desativar' : 'ativar'}</button></div><div class="profile-line"><span>Privacidade</span><span class="small">somente você</span></div></div><div class="section-title"><h3>Conectar dispositivos</h3></div><div class="card device-card">${renderHeartRateDeviceRow()}<div class="device-row"><div class="device-icon" aria-hidden="true">📶</div><div class="device-copy"><strong>Check-in por NFC</strong><p class="small">Aproxime o celular de uma tag na academia e o check-in acontece sozinho.</p></div><span class="status-pill status-neutral">Em breve</span></div><button class="secondary" data-device-notify>Avisar sobre o NFC quando estiver disponível</button></div><div class="section-title"><h3>Voz do Companheiro</h3></div><div class="card voice-card"><p class="small">Escolha uma gravação de uma pessoa real para ouvir sua motivação.</p><label class="voice-upload">Carregar gravação humana<input type="file" accept="audio/*" data-human-voice /></label></div><button class="secondary" style="width:100%;margin-top:18px" data-reset>Refazer onboarding</button><button class="text-action" data-logout>Sair da conta</button></section>`; }
+function renderProfile() { return `<section class="screen">${header('Sobre você', 'PERFIL')}${renderModalityPanel(data.profile.activity, 'customize')}<div class="card profile-block"><div class="profile-line"><span class="small">Nome</span><strong>${escapeHtml(data.profile.name)}</strong></div><div class="profile-line"><span class="small">Atividades</span><strong>${escapeHtml((data.profile.activities || [data.profile.activity]).join(', '))}</strong></div><div class="profile-line"><span class="small">Rotina</span><strong>${data.profile.frequency}x por semana · ${data.profile.time} · ${data.profile.duration} min</strong></div><div class="profile-line"><span class="small">Dias</span><strong>${escapeHtml((data.profile.days || []).join(', ') || 'Não informado')}</strong></div><div class="profile-line"><span class="small">Deslocamento</span><strong>${escapeHtml(data.profile.commuteTime)} · ${escapeHtml(data.profile.transport)}</strong></div><div class="profile-line"><span class="small">Meu porquê</span><strong>${escapeHtml(data.profile.motivation || data.profile.goal)}</strong></div><div class="profile-line"><span class="small">Nível de disciplina</span><strong>${escapeHtml(data.profile.disciplineLevel)}</strong></div><div class="profile-line"><span class="small">Objeções</span><strong>${escapeHtml((data.profile.objections || [data.profile.objection]).join(', '))}</strong></div><div class="profile-line"><span class="small">Minha dificuldade</span><strong>${escapeHtml(data.profile.difficulty)}</strong></div><div class="profile-line"><span class="small">Contexto</span><strong>Trabalho: ${data.profile.workStatus} · Estudos: ${data.profile.studyStatus} · Filhos: ${data.profile.hasChildren}</strong></div></div><div class="section-title"><h3>Preferências</h3></div><div class="card"><div class="profile-line"><span>Notificações</span><button class="status-pill notification-button" data-notifications>${data.profile.notificationsEnabled ? 'desativar' : 'ativar'}</button></div><div class="profile-line"><span>Privacidade</span><span class="small">somente você</span></div></div><div class="section-title"><h3>Conectar dispositivos</h3></div><div class="card device-card">${renderHeartRateDeviceRow()}<div class="device-row"><div class="device-icon" aria-hidden="true">📶</div><div class="device-copy"><strong>Check-in por NFC</strong><p class="small">Aproxime o celular de uma tag na academia e o check-in acontece sozinho.</p></div><span class="status-pill status-neutral">Em breve</span></div><button class="secondary" data-device-notify>Avisar sobre o NFC quando estiver disponível</button></div><div class="section-title"><h3>Voz do Companheiro</h3></div><div class="card voice-card"><p class="small">Escolha o tom de voz que você prefere ouvir.</p><select id="voice-preference" class="text-input">${TTS_VOICE_LABELS.map(([value, label]) => `<option value="${value}" ${data.profile.voicePreference === value ? 'selected' : ''}>${label}</option>`).join('')}</select><button class="secondary" style="margin-top:10px" data-test-voice>▶ Testar esta voz</button><p class="small" style="margin-top:14px">Ou escolha uma gravação de uma pessoa real para ouvir sua motivação.</p><label class="voice-upload">Carregar gravação humana<input type="file" accept="audio/*" data-human-voice /></label></div><button class="secondary" style="width:100%;margin-top:18px" data-reset>Refazer onboarding</button><button class="text-action" data-logout>Sair da conta</button></section>`; }
 
 function addMessage(from, text) { data.messages.push({ from, text }); save(); syncMessageToBackend(from, text); }
 function contextualFallbackResponse(text) {
@@ -1100,6 +1108,43 @@ function openModal({ title, message, fields = [], confirmText = 'Salvar', cancel
   });
 }
 function openConfirm(title, message, { danger = false, confirmText = 'Confirmar' } = {}) { return openModal({ title, message, confirmText, danger }).then(result => result === true); }
+function openLocationPickerModal() {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `<div class="location-picker-sheet" role="dialog" aria-modal="true" aria-label="Escolher local no mapa"><div class="location-picker-head"><h3>Escolher local no mapa</h3><p class="small">Mova o mapa até o ponto de encontro, igual no WhatsApp.</p></div><div id="location-picker-map" style="position:relative;height:100%"><span class="location-picker-pin" aria-hidden="true">📍</span></div><div class="location-picker-foot"><span class="location-picker-address small" data-picker-address>Buscando sua localização...</span><div class="location-picker-actions"><button type="button" class="secondary" data-picker-cancel>Cancelar</button><button type="button" class="primary" data-picker-confirm>Usar este local</button></div></div></div>`;
+    document.body.appendChild(overlay);
+    const current = { lat: -14.235, lng: -51.925, name: '' };
+    const addressEl = overlay.querySelector('[data-picker-address]');
+    let geocodeTimer = null;
+    let picker = null;
+    const reverseGeocode = (lat, lng) => {
+      window.clearTimeout(geocodeTimer);
+      addressEl.textContent = 'Buscando endereço...';
+      geocodeTimer = window.setTimeout(async () => {
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=pt-BR`);
+          const result = await response.json();
+          current.name = (result?.display_name || '').split(',').slice(0, 3).join(',').trim() || `Ponto em ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+        } catch { current.name = `Ponto em ${lat.toFixed(3)}, ${lng.toFixed(3)}`; }
+        addressEl.textContent = current.name;
+      }, 500);
+    };
+    const close = result => { picker?.remove(); overlay.remove(); resolve(result); };
+    overlay.querySelector('[data-picker-cancel]').addEventListener('click', () => close(null));
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(null); });
+    overlay.querySelector('[data-picker-confirm]').addEventListener('click', () => { if (!current.name) return; close({ name: current.name, lat: current.lat, lng: current.lng }); });
+    window.setTimeout(() => {
+      if (!window.L) { addressEl.textContent = 'Mapa indisponível. Tente novamente.'; return; }
+      picker = L.map('location-picker-map', { attributionControl: false }).setView([current.lat, current.lng], 4);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }).addTo(picker);
+      const updateFromCenter = () => { const center = picker.getCenter(); current.lat = center.lat; current.lng = center.lng; reverseGeocode(center.lat, center.lng); };
+      picker.on('moveend', updateFromCenter);
+      if (navigator.geolocation) navigator.geolocation.getCurrentPosition(position => picker.setView([position.coords.latitude, position.coords.longitude], 15), updateFromCenter, { enableHighAccuracy: false, timeout: 6000, maximumAge: 300000 });
+      else updateFromCenter();
+    }, 30);
+  });
+}
 function showHeartBurst(rect) {
   const heart = document.createElement('div');
   heart.className = 'heart-burst';
@@ -1210,6 +1255,8 @@ function bindEvents() {
   document.querySelector('[data-new-motivation]')?.addEventListener('click', refreshMotivation);
   document.querySelector('[data-notifications]')?.addEventListener('click', async event => { if (data.profile.notificationsEnabled) { data.profile.notificationsEnabled = false; clearNotificationTimers(); event.currentTarget.textContent = 'ativar'; save(); syncProfileWithBackend(); toast('Notificações pausadas'); return; } await enableNotifications(); if (Notification.permission === 'granted') { event.currentTarget.textContent = 'desativar'; save(); } });
   document.querySelector('[data-human-voice]')?.addEventListener('change', event => { const file = event.target.files?.[0]; if (!file) return; if (humanVoiceAudioUrl) URL.revokeObjectURL(humanVoiceAudioUrl); humanVoiceAudioUrl = URL.createObjectURL(file); toast('Voz humana carregada'); });
+  document.querySelector('#voice-preference')?.addEventListener('change', event => { data.profile.voicePreference = event.target.value; save(); syncProfileWithBackend(); });
+  document.querySelector('[data-test-voice]')?.addEventListener('click', () => { const savedHumanVoice = humanVoiceAudioUrl; humanVoiceAudioUrl = null; playHumanMotivation('Oi! Essa é a minha voz agora. Gostou?'); humanVoiceAudioUrl = savedHumanVoice; });
   document.querySelector('[data-device-notify]')?.addEventListener('click', event => { event.currentTarget.disabled = true; event.currentTarget.textContent = 'Vamos te avisar assim que estiver pronto'; toast('Você será avisado quando o NFC estiver disponível'); });
   document.querySelector('[data-device-connect]')?.addEventListener('click', connectHeartRateMonitor);
   document.querySelector('[data-device-disconnect]')?.addEventListener('click', disconnectHeartRateMonitor);
