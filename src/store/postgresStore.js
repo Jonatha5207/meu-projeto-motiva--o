@@ -146,7 +146,7 @@ export function createPostgresStore({ connectionString, ssl = true, logger }) {
       return rows;
     },
     async findObjection(idOrName) {
-      const { rows } = await query('select * from objections where id = $1 or lower(name) = lower($2)', [idOrName, String(idOrName || '')]);
+      const { rows } = await query('select * from objections where id::text = $1 or lower(name) = lower($1)', [String(idOrName || '')]);
       return rows[0] || null;
     },
     async recordUserObjection(userId, objectionId) {
