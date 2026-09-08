@@ -12,6 +12,16 @@ export function registerAuthRoutes({ json, readJsonBody, requireUser, services }
       json(response, 200, result);
       return true;
     }
+    if (request.url === '/api/auth/google' && request.method === 'POST') {
+      const input = await readJsonBody(request);
+      const result = await services.auth.loginWithGoogle(input);
+      json(response, 200, result);
+      return true;
+    }
+    if (request.url === '/api/auth/google-client-id' && request.method === 'GET') {
+      json(response, 200, { clientId: services.auth.googleClientId() });
+      return true;
+    }
     if (request.url === '/api/me' && request.method === 'GET') {
       const user = await requireUser(request, response); if (!user) return true;
       json(response, 200, await services.auth.me(user));

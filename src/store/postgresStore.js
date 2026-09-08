@@ -57,7 +57,7 @@ export function createPostgresStore({ connectionString, ssl = true, logger }) {
       return rows[0] || null;
     },
     async createUser(user) {
-      await query('insert into users (id, name, email, password_hash, created_at) values ($1, $2, $3, $4, $5)', [user.id, user.name, user.email, user.password_hash, user.created_at]);
+      await query('insert into users (id, name, email, password_hash, auth_provider, created_at) values ($1, $2, $3, $4, $5, $6)', [user.id, user.name, user.email, user.password_hash || null, user.auth_provider || 'local', user.created_at]);
       await query('insert into user_profiles (user_id, data, notifications_enabled) values ($1, $2, true) on conflict (user_id) do nothing', [user.id, {}]);
       return user;
     },

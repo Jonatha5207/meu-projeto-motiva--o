@@ -22,3 +22,5 @@ services:
         value: "true"
       - key: ADMIN_TOKEN
         generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false

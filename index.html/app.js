@@ -129,6 +129,44 @@ function load() {
 function speakWelcome(name) {
   speakMotivation(`Oi, ${name}. Eu sou seu Companheiro. Vou estar com você nos dias bons e nos dias difíceis. Hoje a gente só precisa dar um pequeno passo.`);
 }
+let googleClientId = null;
+async function loadGoogleClientId() {
+  try {
+    const result = await apiRequest('/api/auth/google-client-id');
+    googleClientId = result?.clientId || null;
+    if (googleClientId && !data.authenticated) render();
+  } catch { /* Sem backend disponível: o botão do Google simplesmente não aparece. */ }
+}
+function renderGoogleSignInButton() {
+  const container = document.querySelector('#google-signin-button');
+  if (!container || !googleClientId || !window.google?.accounts?.id) return;
+  google.accounts.id.initialize({ client_id: googleClientId, callback: handleGoogleCredential });
+  google.accounts.id.renderButton(container, { theme: 'outline', size: 'large', width: 320, text: 'continue_with', locale: 'pt-BR' });
+}
+function finishAuth(result, fallbackName) {
+  if (result?.token) localStorage.setItem(AUTH_TOKEN_KEY, result.token);
+  if (result?.user?.id) data.userId = result.user.id;
+  data.authenticated = true;
+  data.profile.name = result?.user?.name || fallbackName;
+  data.profile.email = result?.user?.email || data.profile.email;
+  data.messages[0] = { from: 'app', text: `Oi, ${data.profile.name}. Hoje tem treino. Vamos começar juntos?` };
+  awardPoints(5, 'primeiro acesso');
+  currentView = data.onboarded ? 'home' : 'onboarding';
+  save(); render(); speakWelcome(data.profile.name);
+}
+async function handleGoogleCredential(response) {
+  try {
+    const result = await apiRequest('/api/auth/google', { method: 'POST', body: JSON.stringify({ credential: response.credential }) });
+    finishAuth(result, result?.user?.name || 'Você');
+  } catch {
+    toast('Não foi possível entrar com o Google agora');
+  }
+}
+async function shareMoment(text) {
+  if (navigator.share) { try { await navigator.share({ title: 'Companheiro', text }); return; } catch { return; } }
+  try { await navigator.clipboard.writeText(text); toast('Copiado! Cole no Instagram, Facebook ou onde quiser.'); }
+  catch { toast('Não foi possível compartilhar agora'); }
+}
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 async function apiRequest(path, options = {}) { if (!API_ORIGIN) return null; const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }; const token = localStorage.getItem(AUTH_TOKEN_KEY); if (token) headers.Authorization = `Bearer ${token}`; const response = await fetch(`${API_ORIGIN}${path}`, { ...options, headers }); if (!response.ok) throw new Error(`api_${response.status}`); return response.status === 204 ? null : response.json(); }
 const COMMUNITY_LIVE_VIEWS = ['community', 'connectionChat', 'home', 'today'];
@@ -379,6 +417,7 @@ function render() {
   if (!data.authenticated) {
     app.innerHTML = renderLoginV2();
     bindEvents();
+    renderGoogleSignInButton();
     return;
   }
   if (currentView === 'summary') createFirstSession();
@@ -396,7 +435,7 @@ function render() {
   if (['today', 'chat'].includes(currentView)) startLiveClock(); else window.clearInterval(liveTimer);
 }
 function renderLoginV2() {
-  return `<section class="screen login-screen"><div class="brand-row"><div class="logo"><span class="logo-mark">✦</span> companheiro</div><span class="offline-badge">${navigator.onLine ? 'online' : 'offline pronto'}</span></div><div class="login-hero"><div class="hero-shape"></div><div class="eyebrow">SEU COMPANHEIRO DIARIO</div><h1>Como posso chamar voce?</h1><p class="lead">Eu vou lembrar do que voce gosta e estar por perto quando comecar parecer dificil.</p><form id="login-form" class="login-form"><label class="field-label" for="user-name">Seu nome</label><input id="user-name" name="name" class="text-input" placeholder="Digite seu nome" autocomplete="name" required /><label class="field-label" for="user-email">E-mail</label><input id="user-email" name="email" class="text-input" type="email" placeholder="voce@exemplo.com" autocomplete="email" required /><label class="field-label" for="user-password">Senha</label><input id="user-password" name="password" class="text-input" type="password" minlength="8" placeholder="Minimo de 8 caracteres" autocomplete="new-password" required /><button class="primary" type="submit">Criar meu espaco <span>→</span></button></form></div><p class="login-note">Seus dados ficam protegidos e o app continua funcionando sem internet.</p></section>`;
+  return `<section class="screen login-screen"><div class="brand-row"><div class="logo"><span class="logo-mark">✦</span> companheiro</div><span class="offline-badge">${navigator.onLine ? 'online' : 'offline pronto'}</span></div><div class="login-hero"><div class="hero-shape"></div><div class="eyebrow">SEU COMPANHEIRO DIARIO</div><h1>Como posso chamar voce?</h1><p class="lead">Eu vou lembrar do que voce gosta e estar por perto quando comecar parecer dificil.</p><form id="login-form" class="login-form"><label class="field-label" for="user-name">Seu nome</label><input id="user-name" name="name" class="text-input" placeholder="Digite seu nome" autocomplete="name" required /><label class="field-label" for="user-email">E-mail</label><input id="user-email" name="email" class="text-input" type="email" placeholder="voce@exemplo.com" autocomplete="email" required /><label class="field-label" for="user-password">Senha</label><input id="user-password" name="password" class="text-input" type="password" minlength="8" placeholder="Minimo de 8 caracteres" autocomplete="new-password" required /><button class="primary" type="submit">Criar meu espaco <span>→</span></button></form>${googleClientId ? '<div class="login-divider"><span>ou</span></div><div id="google-signin-button" class="google-signin-container"></div>' : ''}</div><p class="login-note">Seus dados ficam protegidos e o app continua funcionando sem internet.</p></section>`;
 }
 
 function renderLogin() {
@@ -473,7 +512,7 @@ function renderToday() {
   const action = completed ? 'Ver meu histórico' : 'Conversar comigo';
   const level = levelInfo();
   return `<section class="screen">${header('Olá, ' + escapeHtml(data.profile.name))}
-    <div class="hero-card sport-hero"><div class="hero-orbit hero-orbit-one"></div><div class="hero-orbit hero-orbit-two"></div><div class="hero-content"><div class="hero-topline"><div class="eyebrow">${completed ? 'TREINO CONCLUÍDO' : 'SEU PRÓXIMO MOMENTO'}</div><span class="hero-sport-badge">${sportIcon()} ${escapeHtml(data.profile.activity)}</span></div><h2>${completed ? 'Mais um feito.' : 'Vamos começar?'}</h2><p class="hero-subtitle">${completed ? 'Você apareceu por você hoje.' : 'Sem pensar no treino inteiro. Só o próximo passo.'}</p></div><div class="session-bottom"><div><div class="small">Seu horário</div><div class="session-time">${data.profile.time}</div></div><button class="primary" data-today-action>${action} <span>→</span></button></div></div>${completed ? '<div class="feedback-card"><p class="post-message">Sabia que você conseguiria.</p><h3>Como você se sentiu?</h3><div class="feedback-options">' + ['😀 Muito bem', '🙂 Bem', '😐 Normal', '😫 Foi difícil'].map(item => `<button data-feedback="${item}">${item}</button>`).join('') + '</div><p class="small" data-feedback-status>Mais um treino feito. Não foi sobre vontade. Foi sobre aparecer.</p></div>' : ''}${status === 'NOT_COMPLETED' ? '<div class="feedback-card"><p class="post-message">Tudo bem. Amanhã é uma nova oportunidade.</p><h3>Quer me contar o que aconteceu?</h3><div class="feedback-options">' + ['Cansaço', 'Falta de tempo', 'Preguiça', 'Problema pessoal', 'Não estava bem', 'Outro'].map(item => `<button data-not-completed-reason="${item}">${item}</button>`).join('') + '</div><p class="small" data-reason-status>Seu registro fica só para você.</p></div>' : ''}
+    <div class="hero-card sport-hero"><div class="hero-orbit hero-orbit-one"></div><div class="hero-orbit hero-orbit-two"></div><div class="hero-content"><div class="hero-topline"><div class="eyebrow">${completed ? 'TREINO CONCLUÍDO' : 'SEU PRÓXIMO MOMENTO'}</div><span class="hero-sport-badge">${sportIcon()} ${escapeHtml(data.profile.activity)}</span></div><h2>${completed ? 'Mais um feito.' : 'Vamos começar?'}</h2><p class="hero-subtitle">${completed ? 'Você apareceu por você hoje.' : 'Sem pensar no treino inteiro. Só o próximo passo.'}</p></div><div class="session-bottom"><div><div class="small">Seu horário</div><div class="session-time">${data.profile.time}</div></div><button class="primary" data-today-action>${action} <span>→</span></button></div></div>${completed ? '<div class="feedback-card"><p class="post-message">Sabia que você conseguiria.</p><h3>Como você se sentiu?</h3><div class="feedback-options">' + ['😀 Muito bem', '🙂 Bem', '😐 Normal', '😫 Foi difícil'].map(item => `<button data-feedback="${item}">${item}</button>`).join('') + '</div><p class="small" data-feedback-status>Mais um treino feito. Não foi sobre vontade. Foi sobre aparecer.</p><button class="secondary" style="width:100%;margin-top:12px" data-share-moment>Compartilhar essa vitória ↗</button></div>' : ''}${status === 'NOT_COMPLETED' ? '<div class="feedback-card"><p class="post-message">Tudo bem. Amanhã é uma nova oportunidade.</p><h3>Quer me contar o que aconteceu?</h3><div class="feedback-options">' + ['Cansaço', 'Falta de tempo', 'Preguiça', 'Problema pessoal', 'Não estava bem', 'Outro'].map(item => `<button data-not-completed-reason="${item}">${item}</button>`).join('') + '</div><p class="small" data-reason-status>Seu registro fica só para você.</p></div>' : ''}
     <div class="live-panel"><div class="live-panel-top"><div><div class="eyebrow">PULSO AO VIVO</div><strong data-live-status>${completed ? 'Treino concluído' : 'Conectando ao seu momento...'}</strong></div><span class="live-signal"><i></i><i></i><i></i></span></div><div class="live-time" data-live-clock>--:--:--</div><div class="live-countdown" data-live-countdown>Calculando seu próximo passo...</div><div class="workout-timer-badge" data-workout-timer-badge hidden><span class="workout-timer-dot"></span>Treino em andamento · <strong data-workout-timer>00:00</strong></div>${data.devices?.heartRateConnected ? `<div class="heart-rate-live"><span class="heart-rate-dot"></span>Frequência cardíaca · <strong data-heart-rate-live>${data.devices.heartRateBpm ? data.devices.heartRateBpm + ' bpm' : 'lendo...'}</strong></div>` : ''}</div>${renderPulseStrip()}<div class="today-actions"><button class="map-link" data-view="map">⌖ Abrir mapa ao vivo</button><button class="map-link" data-view="community">♧ Encontrar companhia</button></div>${!completed && trainingDate() <= new Date() && !['NOT_COMPLETED','CANCELLED','RESCHEDULED'].includes(status) ? '<div class="post-training-card"><h3>E aí, você foi?</h3><div class="post-training-actions"><button class="primary" data-post-training="yes">SIM</button><button class="secondary" data-post-training="no">NÃO</button></div></div>' : ''}
     <div class="section-title"><div class="stat-line"><h3>Seu próximo passo</h3><span class="status-pill status-${statusVisual(status)}"><span aria-hidden="true">${statusVisual(status) === 'success' ? '✓' : statusVisual(status) === 'attention' ? '!' : '•'}</span> ${statusLabel(status)}</span></div></div>
     ${renderModalityPanel(data.profile.activity, 'today')}
@@ -953,7 +992,7 @@ function bindEvents() {
     else await navigator.clipboard?.writeText(shareText).catch(() => {});
     toast('Publicacao pronta para compartilhar');
   }));
-  document.querySelector('#login-form')?.addEventListener('submit', async event => { event.preventDefault(); const form = new FormData(event.currentTarget); const name = String(form.get('name') || '').trim(); const payload = { name, email: String(form.get('email') || '').trim(), password: String(form.get('password') || '') }; if (!name || !payload.email || payload.password.length < 8) return; let result = null; try { try { result = await apiRequest('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }); } catch { result = await apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: payload.email, password: payload.password }) }); } } catch { /* Sem conexão: segue no modo local abaixo. */ } if (result?.token) localStorage.setItem(AUTH_TOKEN_KEY, result.token); if (result?.user?.id) data.userId = result.user.id; data.authenticated = true; data.profile.name = result?.user?.name || name; data.profile.email = result?.user?.email || payload.email; data.messages[0] = { from: 'app', text: `Oi, ${data.profile.name}. Hoje tem treino. Vamos começar juntos?` }; awardPoints(5, 'primeiro acesso'); currentView = data.onboarded ? 'home' : 'onboarding'; save(); render(); speakWelcome(data.profile.name); if (!result) toast('Sem conexão: o acesso local continua disponível'); });
+  document.querySelector('#login-form')?.addEventListener('submit', async event => { event.preventDefault(); const form = new FormData(event.currentTarget); const name = String(form.get('name') || '').trim(); const payload = { name, email: String(form.get('email') || '').trim(), password: String(form.get('password') || '') }; if (!name || !payload.email || payload.password.length < 8) return; let result = null; try { try { result = await apiRequest('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }); } catch { result = await apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: payload.email, password: payload.password }) }); } } catch { /* Sem conexão: segue no modo local abaixo. */ } finishAuth(result, name); if (!result) toast('Sem conexão: o acesso local continua disponível'); });
   document.querySelector('[data-realtime-voice]')?.addEventListener('click', event => toggleRealtimeVoice(event.currentTarget));
   document.querySelector('[data-onboard-next]')?.addEventListener('click', () => { if (data.onboarded && !data.session.created) { createFirstSession(); toast('Seu primeiro treino esta marcado'); } });
   document.querySelectorAll('[data-routine-toggle]').forEach(button => button.addEventListener('click', () => { const routine = data.profile.routines.find(item => item.id === button.dataset.routineToggle); if (!routine) return; routine.active = !routine.active; if (routine.id === 'main') data.profile.activeSchedule = routine.active; save(); syncProfileWithBackend(); render(); toast(routine.active ? 'Rotina ativada' : 'Rotina pausada'); }));
@@ -980,6 +1019,7 @@ function bindEvents() {
   document.querySelectorAll('[data-willingness]').forEach(button => button.addEventListener('click', () => { data.session.willingness = Number(button.dataset.willingness); data.session.status = 'ENGAGED'; addMessage('user', `Minha vontade hoje é ${button.dataset.willingness}/10.`); addMessage('app', Number(button.dataset.willingness) < 5 ? 'Entendi. Vamos descobrir o que está pesando, sem pressa.' : 'Boa. Vamos transformar essa vontade em um primeiro passo.'); save(); render(); }));
   document.querySelectorAll('[data-post-training]').forEach(button => button.addEventListener('click', () => { if (button.dataset.postTraining === 'yes') completeSession(); else { data.session.status = 'NOT_COMPLETED'; addMessage('app', 'Tudo bem. Amanhã é uma nova oportunidade.'); addMessage('app', 'Quer me contar o que aconteceu?'); save(); render(); } }));
   document.querySelector('[data-whatsapp]')?.addEventListener('click', () => { const text = `Meu Companheiro: ${motivationText()}`; window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener'); });
+  document.querySelector('[data-share-moment]')?.addEventListener('click', () => shareMoment(`Treinei ${data.profile.activity} hoje com o Companheiro. Mais um dia que eu não desisti. 💪`));
   document.querySelector('[data-speak]')?.addEventListener('click', () => { awardPoints(2, 'você se cuidou'); render(); playHumanMotivation(); });
   document.querySelector('[data-new-motivation]')?.addEventListener('click', refreshMotivation);
   document.querySelector('[data-notifications]')?.addEventListener('click', async event => { if (data.profile.notificationsEnabled) { data.profile.notificationsEnabled = false; clearNotificationTimers(); event.currentTarget.textContent = 'ativar'; save(); syncProfileWithBackend(); toast('Notificações pausadas'); return; } await enableNotifications(); if (Notification.permission === 'granted') { event.currentTarget.textContent = 'desativar'; save(); } });
@@ -1037,5 +1077,6 @@ function renderCustomize() {
   return `<section class="screen customize-screen">${header('Modele seu app', 'SEU ESTILO')}<p class="lead">Escolha um visual mais objetivo para a sua modalidade. Tudo fica salvo neste aparelho.</p><div class="custom-preview"><div class="logo"><span class="logo-mark sport-logo-mark">${sportIcon(c.sport)}</span> <strong>${escapeHtml(c.appName)}</strong></div><div class="preview-sport">${sportIcon(c.sport)} ${escapeHtml(c.sport)}</div><div class="preview-bubble">Hoje tem ${escapeHtml(c.sport)}. Vamos comecar?</div><span class="status-pill">previa ao vivo</span></div>${renderModalityPanel(c.sport || data.profile.activity, 'customize')}<div class="section-title"><h3>Nome do app</h3></div><div class="card"><label class="field-label" for="custom-app-name">Como quer chamar seu companheiro?</label><input id="custom-app-name" class="text-input" maxlength="24" value="${escapeHtml(c.appName)}" placeholder="Ex.: Meu Ritmo" /></div><div class="section-title"><h3>Seu esporte principal</h3></div><div class="choice-grid custom-sports">${sports.map(sport => `<button class="choice ${c.sport === sport ? 'selected' : ''}" data-custom-sport="${sport}"><span class="sport-choice-icon" aria-hidden="true">${sportIcon(sport)}</span>${sport}</button>`).join('')}</div><div class="section-title"><h3>Layout e cores</h3></div><div class="card"><label class="field-label" for="custom-theme">Tema</label><select id="custom-theme" class="text-input"><option value="light" ${c.theme === 'light' ? 'selected' : ''}>Claro</option><option value="dark" ${c.theme === 'dark' ? 'selected' : ''}>Escuro</option></select><span class="field-label">Cor de destaque</span><div class="accent-grid"><button class="accent-option accent-green ${c.accent === 'green' ? 'selected' : ''}" data-custom-accent="green">Verde</button><button class="accent-option accent-blue ${c.accent === 'blue' ? 'selected' : ''}" data-custom-accent="blue">Azul</button><button class="accent-option accent-orange ${c.accent === 'orange' ? 'selected' : ''}" data-custom-accent="orange">Laranja</button></div></div><button class="primary" style="width:100%;margin-top:18px" data-save-customization>Aplicar meu estilo</button></section>`;
 }
 render();
+loadGoogleClientId();
 
 

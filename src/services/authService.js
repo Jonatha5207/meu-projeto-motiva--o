@@ -30,6 +30,37 @@ export function createAuthService({ store, analyticsService }) {
       return { user: { id: user.id, name: user.name, email: user.email }, token };
     },
 
+    googleClientId() {
+      return process.env.GOOGLE_CLIENT_ID || null;
+    },
+
+    async loginWithGoogle({ credential }) {
+      const idToken = String(credential || '');
+      const expectedAudience = process.env.GOOGLE_CLIENT_ID;
+      if (!idToken || !expectedAudience) throw badRequest('google_login_not_configured');
+      let payload;
+      try {
+        const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+        if (!response.ok) throw new Error('invalid_token');
+        payload = await response.json();
+      } catch {
+        throw unauthorized('invalid_google_token');
+      }
+      if (payload.aud !== expectedAudience) throw unauthorized('invalid_google_audience');
+      if (payload.email_verified !== 'true' && payload.email_verified !== true) throw unauthorized('google_email_not_verified');
+      const cleanEmail = cleanText(payload.email, 160).toLowerCase();
+      let user = await store.getUserByEmail(cleanEmail);
+      if (!user) {
+        const id = randomUUID();
+        user = { id, name: cleanText(payload.name, 80) || cleanEmail.split('@')[0], email: cleanEmail, password_hash: null, auth_provider: 'google', created_at: new Date().toISOString() };
+        await store.createUser(user);
+        await analyticsService.record(id, 'ONBOARDING_STARTED');
+      }
+      const token = randomUUID();
+      await store.createAuthToken(token, user.id);
+      return { user: { id: user.id, name: user.name, email: user.email }, token };
+    },
+
     async authenticate(request) {
       const token = request.headers.authorization?.replace(/^Bearer\s+/i, '');
       if (!token) return null;
