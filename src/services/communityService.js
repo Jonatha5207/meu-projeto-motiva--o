@@ -5,6 +5,27 @@ import { isUserOnline, sendToUser, broadcastRealtime } from '../lib/realtime.js'
 
 const LIVE_LOCATION_DURATION_MS = 2 * 60 * 60 * 1000; // 2 horas: some sozinho se a pessoa esquecer de desligar.
 
+async function decoratePickupEvent(store, event, userId) {
+  const participants = await store.listPickupEventParticipants(event.id);
+  const users = await Promise.all(participants.map(item => store.getUserById(item.user_id)));
+  return {
+    id: event.id,
+    activity: event.activity,
+    title: event.title,
+    location_name: event.location_name,
+    lat: event.lat,
+    lng: event.lng,
+    scheduled_at: event.scheduled_at instanceof Date ? event.scheduled_at.toISOString() : event.scheduled_at,
+    duration_minutes: event.duration_minutes,
+    price_cents: event.price_cents,
+    max_spots: event.max_spots,
+    creator_id: event.creator_id,
+    spots_taken: participants.length,
+    joined: participants.some(item => item.user_id === userId),
+    participants: users.filter(Boolean).map(user => ({ id: user.id, name: user.name })),
+  };
+}
+
 async function requireAcceptedConnection(store, userId, connectionId) {
   const connection = await store.getConnection(connectionId);
   if (!connection || connection.status !== 'ACCEPTED' || (connection.requester_id !== userId && connection.recipient_id !== userId)) throw notFound('connection_not_found');
@@ -118,6 +139,47 @@ export function createCommunityService({ store }) {
 
     async listLiveLocations() {
       return store.listActiveLiveLocations();
+    },
+
+    async createPickupEvent(userId, input = {}) {
+      const title = cleanText(input.title, 80);
+      const activity = cleanText(input.activity, 40);
+      const locationName = cleanText(input.location_name, 120);
+      if (!title || !activity || !locationName) throw badRequest('invalid_pickup_event');
+      const scheduledAt = new Date(input.scheduled_at);
+      if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() < Date.now() - 60000) throw badRequest('invalid_scheduled_at');
+      const durationMinutes = Math.min(480, Math.max(15, Math.round(Number(input.duration_minutes)) || 60));
+      const priceCents = Math.max(0, Math.round(Number(input.price_cents) || 0));
+      const maxSpots = Math.min(200, Math.max(1, Math.round(Number(input.max_spots)) || 10));
+      const lat = Number.isFinite(Number(input.lat)) ? Math.round(Number(input.lat) * 1000) / 1000 : null;
+      const lng = Number.isFinite(Number(input.lng)) ? Math.round(Number(input.lng) * 1000) / 1000 : null;
+      const event = { id: randomUUID(), creator_id: userId, activity, title, location_name: locationName, lat, lng, scheduled_at: scheduledAt.toISOString(), duration_minutes: durationMinutes, price_cents: priceCents, max_spots: maxSpots, created_at: new Date().toISOString() };
+      await store.createPickupEvent(event);
+      await store.joinPickupEvent(event.id, userId);
+      broadcastRealtime('pickup-event-created', { id: event.id, activity });
+      return decoratePickupEvent(store, event, userId);
+    },
+
+    async listPickupEvents(userId) {
+      const events = await store.listUpcomingPickupEvents();
+      return Promise.all(events.map(event => decoratePickupEvent(store, event, userId)));
+    },
+
+    async joinPickupEvent(userId, eventId) {
+      const event = await store.getPickupEvent(eventId);
+      if (!event) throw notFound('pickup_event_not_found');
+      const participants = await store.listPickupEventParticipants(eventId);
+      if (!participants.some(item => item.user_id === userId)) {
+        if (participants.length >= event.max_spots) throw new AppError(409, 'pickup_event_full');
+        await store.joinPickupEvent(eventId, userId);
+      }
+      broadcastRealtime('pickup-event-updated', { id: eventId });
+      return decoratePickupEvent(store, event, userId);
+    },
+
+    async leavePickupEvent(userId, eventId) {
+      await store.leavePickupEvent(eventId, userId);
+      broadcastRealtime('pickup-event-updated', { id: eventId });
     },
   };
 }

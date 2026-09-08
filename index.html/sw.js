@@ -1,4 +1,4 @@
-const CACHE_NAME = 'companheiro-offline-v8';
+const CACHE_NAME = 'companheiro-offline-v9';
 const APP_SHELL = ['./', './index.html', './styles.css', './app.js', './services.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', event => {
@@ -13,6 +13,15 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  // Chamadas de API nunca podem vir do cache -- comunidade, jogos marcados,
+  // localizacao ao vivo etc. precisam sempre da resposta mais recente do servidor.
+  // Cachear isso congelava a primeira resposta pra sempre (bug real encontrado em
+  // testes: eventos/pessoas novas nunca apareciam depois da primeira carga).
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
   event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
     const copy = response.clone();
     caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));

@@ -57,6 +57,32 @@ export function registerCommunityRoutes({ json, readJsonBody, requireUser, servi
       json(response, 204, {});
       return true;
     }
+    if (request.url === '/api/pickup-events' && request.method === 'GET') {
+      const user = await requireUser(request, response); if (!user) return true;
+      json(response, 200, await services.community.listPickupEvents(user.id));
+      return true;
+    }
+    if (request.url === '/api/pickup-events' && request.method === 'POST') {
+      const user = await requireUser(request, response); if (!user) return true;
+      const input = await readJsonBody(request);
+      const event = await services.community.createPickupEvent(user.id, input);
+      json(response, 201, event);
+      return true;
+    }
+    if (request.url?.match(/^\/api\/pickup-events\/[^/]+\/join$/) && request.method === 'POST') {
+      const user = await requireUser(request, response); if (!user) return true;
+      const id = request.url.split('/')[3];
+      const event = await services.community.joinPickupEvent(user.id, id);
+      json(response, 200, event);
+      return true;
+    }
+    if (request.url?.match(/^\/api\/pickup-events\/[^/]+\/join$/) && request.method === 'DELETE') {
+      const user = await requireUser(request, response); if (!user) return true;
+      const id = request.url.split('/')[3];
+      await services.community.leavePickupEvent(user.id, id);
+      json(response, 204, {});
+      return true;
+    }
     return false;
   };
 }

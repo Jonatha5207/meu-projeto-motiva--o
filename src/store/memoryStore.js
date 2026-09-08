@@ -40,6 +40,8 @@ export function createMemoryStore({ dataDir }) {
   const connections = [];
   const directMessages = new Map(); // connectionId -> message[]
   const liveLocations = new Map(); // userId -> { user_id, lat, lng, activity, started_at, expires_at }
+  const pickupEvents = new Map(); // eventId -> event
+  const pickupEventParticipants = new Map(); // eventId -> Set(userId)
 
   function sessionsFor(userId) { if (!userSessions.has(userId)) userSessions.set(userId, []); return userSessions.get(userId); }
   function conversationsFor(userId) { if (!conversations.has(userId)) conversations.set(userId, []); return conversations.get(userId); }
@@ -157,6 +159,16 @@ export function createMemoryStore({ dataDir }) {
       const now = Date.now();
       return [...liveLocations.values()].filter(item => new Date(item.expires_at).getTime() > now);
     },
+
+    async createPickupEvent(event) { pickupEvents.set(event.id, event); pickupEventParticipants.set(event.id, new Set()); return event; },
+    async getPickupEvent(id) { return pickupEvents.get(id) || null; },
+    async listUpcomingPickupEvents() {
+      const cutoff = Date.now() - 60 * 60 * 1000;
+      return [...pickupEvents.values()].filter(event => new Date(event.scheduled_at).getTime() > cutoff).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+    },
+    async joinPickupEvent(eventId, userId) { if (!pickupEventParticipants.has(eventId)) pickupEventParticipants.set(eventId, new Set()); pickupEventParticipants.get(eventId).add(userId); },
+    async leavePickupEvent(eventId, userId) { pickupEventParticipants.get(eventId)?.delete(userId); },
+    async listPickupEventParticipants(eventId) { return [...(pickupEventParticipants.get(eventId) || [])].map(userId => ({ event_id: eventId, user_id: userId })); },
 
     async load() {
       try {

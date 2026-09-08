@@ -354,6 +354,33 @@ export function createPostgresStore({ connectionString, ssl = true, logger }) {
       return rows;
     },
 
+    async createPickupEvent(event) {
+      await query(
+        `insert into pickup_events (id, creator_id, activity, title, location_name, lat, lng, scheduled_at, duration_minutes, price_cents, max_spots, created_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [event.id, event.creator_id, event.activity, event.title, event.location_name, event.lat, event.lng, event.scheduled_at, event.duration_minutes, event.price_cents, event.max_spots, event.created_at],
+      );
+      return event;
+    },
+    async getPickupEvent(id) {
+      const { rows } = await query('select * from pickup_events where id = $1', [id]);
+      return rows[0] || null;
+    },
+    async listUpcomingPickupEvents() {
+      const { rows } = await query("select * from pickup_events where scheduled_at > now() - interval '1 hour' order by scheduled_at asc", []);
+      return rows;
+    },
+    async joinPickupEvent(eventId, userId) {
+      await query('insert into pickup_event_participants (event_id, user_id) values ($1, $2) on conflict (event_id, user_id) do nothing', [eventId, userId]);
+    },
+    async leavePickupEvent(eventId, userId) {
+      await query('delete from pickup_event_participants where event_id = $1 and user_id = $2', [eventId, userId]);
+    },
+    async listPickupEventParticipants(eventId) {
+      const { rows } = await query('select * from pickup_event_participants where event_id = $1', [eventId]);
+      return rows;
+    },
+
     async load() { /* Postgres não precisa de carga manual: os dados já vivem no banco. */ },
     persist() { /* Cada método já grava direto no banco; não há snapshot a salvar. */ },
     async ping() { await query('select 1', []); return true; },

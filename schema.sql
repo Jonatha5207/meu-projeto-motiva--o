@@ -189,6 +189,29 @@ create table if not exists live_locations (
   expires_at timestamptz not null
 );
 create index if not exists idx_live_locations_expires on live_locations(expires_at);
+-- Jogos marcados: qualquer pessoa cria um horario/local pra sua modalidade, outras
+-- entram como participantes. lat/lng aqui tambem chegam arredondados do front-end.
+create table if not exists pickup_events (
+  id uuid primary key default uuid_generate_v4(),
+  creator_id uuid not null references users(id) on delete cascade,
+  activity text not null,
+  title text not null,
+  location_name text not null,
+  lat double precision,
+  lng double precision,
+  scheduled_at timestamptz not null,
+  duration_minutes integer not null default 60,
+  price_cents integer not null default 0,
+  max_spots integer not null default 10,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_pickup_events_scheduled on pickup_events(scheduled_at);
+create table if not exists pickup_event_participants (
+  event_id uuid not null references pickup_events(id) on delete cascade,
+  user_id uuid not null references users(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  primary key (event_id, user_id)
+);
 create index if not exists idx_sessions_user_date on training_sessions(user_id, scheduled_at);
 create index if not exists idx_schedules_user_weekday on training_schedules(user_id, weekday, scheduled_time);
 create index if not exists idx_events_name on analytics_events(event_name, created_at);

@@ -185,6 +185,8 @@ function connectSocialRealtime() {
   socialRealtime.addEventListener('dm-received', event => { const payload = JSON.parse(event.data); const list = data.community.messages[payload.connection_id] = data.community.messages[payload.connection_id] || []; list.push(payload); save(); if (currentView === 'connectionChat' && data.community.activeChat === payload.connection_id) render(); else toast(`${payload.sender.name}: ${payload.text}`); });
   socialRealtime.addEventListener('live-location-updated', event => { const payload = JSON.parse(event.data); liveLocationPeers = liveLocationPeers.filter(item => item.user_id !== payload.userId); liveLocationPeers.push({ user_id: payload.userId, name: payload.name, activity: payload.activity, lat: payload.lat, lng: payload.lng, expires_at: payload.expiresAt }); if (currentView === 'map') render(); });
   socialRealtime.addEventListener('live-location-removed', event => { const payload = JSON.parse(event.data); liveLocationPeers = liveLocationPeers.filter(item => item.user_id !== payload.userId); if (currentView === 'map') render(); });
+  socialRealtime.addEventListener('pickup-event-created', () => { if (currentView === 'map') loadPickupEvents(); });
+  socialRealtime.addEventListener('pickup-event-updated', () => { if (currentView === 'map') loadPickupEvents(); });
   socialRealtime.onerror = () => { socialRealtime?.close(); socialRealtime = null; window.setTimeout(connectSocialRealtime, 5000); };
 }
 async function loadCommunityData() {
@@ -193,7 +195,7 @@ async function loadCommunityData() {
     if (people) data.community.people = people;
     if (connections) data.community.connections = connections;
     save();
-    if (currentView === 'community') render();
+    if (['community', 'home'].includes(currentView)) render();
   } catch { /* Offline: mantém o que já tinha carregado. */ }
 }
 async function sendConnectionRequest(userId) {
@@ -429,13 +431,17 @@ function render() {
     return;
   }
   const views = { home: renderFeed, summary: renderSummaryV3, today: renderToday, routine: renderRoutineV3, history: renderHistoryV2, profile: renderProfileV4, customize: renderCustomizeV2, admin: renderAdmin, chat: renderChatV2, map: renderMap, community: renderCommunity, connectionChat: renderConnectionChat };
-  if (['community', 'home'].includes(currentView)) loadCommunityData();
+  if (['community', 'home'].includes(currentView)) {
+    if (!communityDataLoaded) { communityDataLoaded = true; loadCommunityData(); }
+  } else {
+    communityDataLoaded = false;
+  }
   app.innerHTML = views[currentView]();
   if (!['chat', 'summary', 'connectionChat'].includes(currentView)) app.innerHTML += renderNavMvp();
   bindEvents();
   if (currentView === 'map') {
     window.setTimeout(initMeetingMap, 0);
-    if (!mapPeersLoaded) { mapPeersLoaded = true; loadLiveLocationPeers(); }
+    if (!mapPeersLoaded) { mapPeersLoaded = true; loadLiveLocationPeers(); loadPickupEvents(); }
   } else {
     mapPeersLoaded = false;
   }
@@ -506,15 +512,31 @@ function renderConnectionChat() {
   return `<section class="screen chat-wrap connection-chat-screen"><div class="chat-topline"><button class="icon-button" data-view="community" aria-label="Voltar">←</button><div class="companion-avatar">${escapeHtml(otherName[0] || '?')}</div><div><strong>${escapeHtml(otherName)}</strong><p class="small">${connection?.online ? 'online agora' : 'offline'}</p></div></div><div class="chat-messages">${messages.length ? messages.map(message => `<div class="bubble ${message.sender_id === data.userId ? 'user' : ''}">${escapeHtml(message.text)}</div>`).join('') : '<p class="small">Nenhuma mensagem ainda. Diga oi!</p>'}</div><form class="chat-form" id="connection-chat-form"><input class="text-input" id="connection-chat-input" placeholder="Escreva uma mensagem" autocomplete="off" /><button class="send" type="submit">➤</button></form></section>`;
 }
 function header(title, kicker = 'COMPANHEIRO') { const initial = String(data.profile.name || 'C').trim().charAt(0).toUpperCase(); return `<div class="topline app-header"><div class="header-lead"><button class="icon-button drawer-trigger" type="button" data-open-drawer aria-label="Abrir modalidades">${icon('menu')}</button><div class="header-copy"><div class="eyebrow">${kicker}</div><h2>${title}</h2><span class="header-date">${currentDateLabel()}</span></div></div><div class="header-actions"><span class="offline-badge">${navigator.onLine ? 'online' : 'offline pronto'}</span><button class="profile-avatar" aria-label="Abrir perfil" data-view="profile">${initial}</button></div></div>`; }
+function groupedSportCatalog() {
+  const groups = new Map();
+  sportCatalog.forEach(sport => {
+    const tag = sportLayout(sport).tag;
+    if (!groups.has(tag)) groups.set(tag, []);
+    groups.get(tag).push(sport);
+  });
+  return groups;
+}
 function openSportDrawer() {
   const overlay = document.createElement('div');
   overlay.className = 'drawer-overlay';
-  overlay.innerHTML = `<nav class="drawer-panel"><div class="drawer-header"><div><span class="eyebrow" style="color:#b9d4bf">MODALIDADES</span><strong>Escolha seu esporte</strong></div><button class="icon-button" type="button" data-drawer-close aria-label="Fechar">×</button></div><div class="drawer-list">${sportCatalog.map(sport => `<button type="button" class="drawer-item ${sport === data.profile.activity ? 'selected' : ''}" data-drawer-sport="${escapeHtml(sport)}"><span class="drawer-item-icon">${sportIcon(sport)}</span><span>${escapeHtml(sport)}</span></button>`).join('')}</div></nav>`;
+  const groups = groupedSportCatalog();
+  const groupsHtml = [...groups.entries()].map(([tag, sports]) => `<div class="drawer-group"><span class="drawer-group-label">${escapeHtml(tag)}</span>${sports.map(sport => `<button type="button" class="drawer-item ${sport === data.profile.activity ? 'selected' : ''}" data-drawer-sport="${escapeHtml(sport)}"><span class="drawer-item-icon">${sportIcon(sport)}</span><span>${escapeHtml(sport)}</span></button>`).join('')}</div>`).join('');
+  overlay.innerHTML = `<nav class="drawer-panel"><div class="drawer-header"><div><span class="eyebrow" style="color:#b9d4bf">MODALIDADES</span><strong>Escolha seu esporte</strong></div><button class="icon-button" type="button" data-drawer-close aria-label="Fechar">×</button></div><div class="drawer-search"><input type="text" class="drawer-search-input" placeholder="Buscar modalidade..." data-drawer-search /></div><div class="drawer-list">${groupsHtml}</div></nav>`;
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('open'));
   const close = () => { overlay.classList.remove('open'); window.setTimeout(() => overlay.remove(), 220); };
   overlay.querySelector('[data-drawer-close]').addEventListener('click', close);
   overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+  overlay.querySelector('[data-drawer-search]').addEventListener('input', event => {
+    const query = event.currentTarget.value.trim().toLowerCase();
+    overlay.querySelectorAll('.drawer-item').forEach(item => { item.hidden = !item.textContent.toLowerCase().includes(query); });
+    overlay.querySelectorAll('.drawer-group').forEach(group => { group.hidden = ![...group.querySelectorAll('.drawer-item')].some(item => !item.hidden); });
+  });
   overlay.querySelectorAll('[data-drawer-sport]').forEach(button => button.addEventListener('click', () => {
     const sport = button.dataset.drawerSport;
     data.profile.activity = sport;
@@ -677,7 +699,59 @@ function runPreparationJourney(millisecondsUntilTraining) {
 function statusLabel(status) { return ({ PREPARING: 'preparação', OBJECTION: 'conversa', PREPARING_TO_GO: 'quase lá', LEFT: 'a caminho', COMPLETED: 'realizado', RESCHEDULED: 'remarcado', CANCELLED: 'cancelado', NOT_COMPLETED: 'não realizado', ENGAGED: 'em conversa' }[status] || 'planejado'); }
 function statusVisual(status) { return ({ PENDING: 'neutral', PREPARING: 'attention', ENGAGED: 'active', OBJECTION: 'conversation', PREPARING_TO_GO: 'active', LEFT: 'active', COMPLETED: 'success', CANCELLED: 'neutral', RESCHEDULED: 'neutral', NOT_COMPLETED: 'neutral' }[status] || 'neutral'); }
 function meetingPointsForUser() { const activity = data.profile.activity; return meetingPointCatalog.filter(point => point.activities.includes(activity) || point.activities.includes('Outra') || point.id === 'qualquer-cidade'); }
-function renderMap() { const points = meetingPointsForUser(); return `<section class="screen map-screen">${header('Encontre um lugar perto', 'MAPA')}<p class="lead">Escolha um ponto abaixo. Toque em "Ir de Waze" ou "Ir de Google Maps" e o caminho abre na hora.</p><div class="map-safety"><span class="safety-mark">✓</span><div><strong>Privacidade primeiro</strong><p>Só locais públicos. Nunca sua localização exata.</p></div></div><div class="card live-location-card"><div class="live-location-copy"><strong>${liveLocationSharing ? 'Você está visível agora' : 'Estou aqui agora'}</strong><p class="small">${liveLocationSharing ? `Pessoas de ${escapeHtml(data.profile.activity)} podem te encontrar aqui. Desliga quando quiser.` : 'Ative para outras pessoas da sua modalidade te encontrarem no local exato, por até 2 horas.'}</p></div><button class="${liveLocationSharing ? 'secondary' : 'primary'}" data-toggle-live-location>${liveLocationSharing ? 'Desligar' : 'Ativar'}</button></div><div id="meeting-map" aria-label="Mapa com pontos públicos de encontro"></div><button class="secondary map-fit-button" data-fit-meeting-map>Ver todos os pontos no mapa</button><div class="section-title"><div class="stat-line"><h3>Para ${escapeHtml(data.profile.activity)}</h3><span class="status-pill">${points.length} pontos</span></div></div><div class="meeting-point-list">${points.map(point => { const joined = data.community.meetingPointIds.includes(point.id); const count = point.members + (joined ? 1 : 0); return `<article class="card meeting-point-card"><div class="meeting-point-head"><div class="meeting-point-icon">${sportIcon(data.profile.activity)}</div><div><h3>${escapeHtml(point.name)}</h3><p class="small">${escapeHtml(point.city)}</p></div><span class="point-distance">público</span></div><p class="meeting-point-note">${escapeHtml(point.note)}</p><div class="meeting-point-nav">${point.id !== 'qualquer-cidade' ? `<a class="nav-link nav-link-primary" href="https://waze.com/ul?ll=${point.lat},${point.lng}&navigate=yes" target="_blank" rel="noopener">🧭 Ir de Waze</a><a class="nav-link" href="https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}" target="_blank" rel="noopener">📍 Ir de Google Maps</a>` : `<a class="nav-link nav-link-primary" href="https://waze.com/ul?q=${encodeURIComponent(data.profile.activity || 'atividade fisica')}&navigate=yes" target="_blank" rel="noopener">🧭 Buscar no Waze perto de mim</a><a class="nav-link" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((data.profile.activity || 'atividade fisica') + ' perto de mim')}" target="_blank" rel="noopener">📍 Buscar no Google Maps</a>`}</div><div class="meeting-point-meta"><span><strong>${count}</strong> interessados</span><span>${escapeHtml(point.activities.slice(0, 2).join(' · '))}</span></div><button class="${joined ? 'secondary' : 'primary'} meeting-point-button" data-meeting-point="${point.id}">${joined ? 'Você está neste ponto' : 'Quero encontrar pessoas aqui'}</button></article>`; }).join('')}</div></section>`; }
+let pickupEvents = [];
+function formatEventDateTime(iso) {
+  const date = new Date(iso);
+  return `${date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+function formatEventPrice(cents) {
+  if (!cents) return 'Gratuito';
+  return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+async function loadPickupEvents() {
+  try { pickupEvents = (await apiRequest('/api/pickup-events')) || []; } catch { /* Mantém a última lista carregada. */ }
+  if (currentView === 'map') render();
+}
+function renderPickupEventCard(event) {
+  const full = event.spots_taken >= event.max_spots;
+  const avatars = event.participants.slice(0, 5).map(person => `<span class="pickup-avatar">${escapeHtml((person.name || '?')[0])}</span>`).join('');
+  const extra = event.participants.length > 5 ? `<span class="pickup-avatar pickup-avatar-more">+${event.participants.length - 5}</span>` : '';
+  return `<article class="card pickup-event-card"><div class="pickup-event-head"><div class="meeting-point-icon">${sportIcon(event.activity)}</div><div><h3>${escapeHtml(event.title)}</h3><p class="small">${escapeHtml(event.location_name)}</p></div><span class="status-pill ${full ? 'status-neutral' : 'status-active'}">${event.spots_taken}/${event.max_spots} vagas</span></div><div class="pickup-event-meta"><span>📅 ${formatEventDateTime(event.scheduled_at)}</span><span>⏱ ${event.duration_minutes} min</span><span>💰 ${formatEventPrice(event.price_cents)}</span></div>${event.participants.length ? `<div class="pickup-event-participants">${avatars}${extra}</div>` : ''}<button class="${event.joined ? 'secondary' : 'primary'} pickup-event-button" data-pickup-event="${event.id}" data-joined="${event.joined}" ${full && !event.joined ? 'disabled' : ''}>${event.joined ? 'Sair do jogo' : full ? 'Lotado' : 'Participar'}</button></article>`;
+}
+function renderPickupEventsSection() {
+  const relevant = pickupEvents.filter(event => event.activity === data.profile.activity);
+  return `<div class="section-title"><div class="stat-line"><h3>Jogos marcados</h3><span class="status-pill">${relevant.length}</span></div></div><button class="secondary" style="width:100%;margin-bottom:14px" data-create-pickup-event>+ Marcar um jogo de ${escapeHtml(data.profile.activity)}</button><div class="pickup-event-list">${relevant.length ? relevant.map(renderPickupEventCard).join('') : '<p class="small">Nenhum jogo marcado ainda para essa modalidade. Que tal marcar o primeiro?</p>'}</div>`;
+}
+async function openCreatePickupEventModal() {
+  const values = await openModal({
+    title: 'Marcar um jogo',
+    fields: [
+      { id: 'title', label: 'Título', value: `${data.profile.activity} com a galera` },
+      { id: 'location_name', label: 'Local' },
+      { id: 'scheduled_at', label: 'Data e hora', type: 'datetime-local' },
+      { id: 'duration_minutes', label: 'Duração (minutos)', value: 60, type: 'number', min: 15, max: 480 },
+      { id: 'price_cents', label: 'Preço por pessoa (R$, 0 se for grátis)', value: 0, type: 'number', min: 0 },
+      { id: 'max_spots', label: 'Vagas', value: 10, type: 'number', min: 1, max: 200 },
+    ],
+    confirmText: 'Marcar jogo',
+  });
+  if (!values) return;
+  const title = values.title?.trim();
+  const locationName = values.location_name?.trim();
+  if (!title || !locationName || !values.scheduled_at) { toast('Preencha título, local e data'); return; }
+  try {
+    await apiRequest('/api/pickup-events', { method: 'POST', body: JSON.stringify({
+      title, activity: data.profile.activity, location_name: locationName,
+      scheduled_at: new Date(values.scheduled_at).toISOString(),
+      duration_minutes: Number(values.duration_minutes) || 60,
+      price_cents: Math.round((Number(values.price_cents) || 0) * 100),
+      max_spots: Number(values.max_spots) || 10,
+    }) });
+    toast('Jogo marcado!');
+    loadPickupEvents();
+  } catch { toast('Não foi possível marcar o jogo agora. Você está conectado ao servidor?'); }
+}
+function renderMap() { const points = meetingPointsForUser(); return `<section class="screen map-screen">${header('Encontre um lugar perto', 'MAPA')}<p class="lead">Escolha um ponto abaixo. Toque em "Ir de Waze" ou "Ir de Google Maps" e o caminho abre na hora.</p><div class="map-safety"><span class="safety-mark">✓</span><div><strong>Privacidade primeiro</strong><p>Só locais públicos. Nunca sua localização exata.</p></div></div><div class="card live-location-card"><div class="live-location-copy"><strong>${liveLocationSharing ? 'Você está visível agora' : 'Estou aqui agora'}</strong><p class="small">${liveLocationSharing ? `Pessoas de ${escapeHtml(data.profile.activity)} podem te encontrar aqui. Desliga quando quiser.` : 'Ative para outras pessoas da sua modalidade te encontrarem no local exato, por até 2 horas.'}</p></div><button class="${liveLocationSharing ? 'secondary' : 'primary'}" data-toggle-live-location>${liveLocationSharing ? 'Desligar' : 'Ativar'}</button></div>${renderPickupEventsSection()}<div id="meeting-map" aria-label="Mapa com pontos públicos de encontro"></div><button class="secondary map-fit-button" data-fit-meeting-map>Ver todos os pontos no mapa</button><div class="section-title"><div class="stat-line"><h3>Para ${escapeHtml(data.profile.activity)}</h3><span class="status-pill">${points.length} pontos</span></div></div><div class="meeting-point-list">${points.map(point => { const joined = data.community.meetingPointIds.includes(point.id); const count = point.members + (joined ? 1 : 0); return `<article class="card meeting-point-card"><div class="meeting-point-head"><div class="meeting-point-icon">${sportIcon(data.profile.activity)}</div><div><h3>${escapeHtml(point.name)}</h3><p class="small">${escapeHtml(point.city)}</p></div><span class="point-distance">público</span></div><p class="meeting-point-note">${escapeHtml(point.note)}</p><div class="meeting-point-nav">${point.id !== 'qualquer-cidade' ? `<a class="nav-link nav-link-primary" href="https://waze.com/ul?ll=${point.lat},${point.lng}&navigate=yes" target="_blank" rel="noopener">🧭 Ir de Waze</a><a class="nav-link" href="https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}" target="_blank" rel="noopener">📍 Ir de Google Maps</a>` : `<a class="nav-link nav-link-primary" href="https://waze.com/ul?q=${encodeURIComponent(data.profile.activity || 'atividade fisica')}&navigate=yes" target="_blank" rel="noopener">🧭 Buscar no Waze perto de mim</a><a class="nav-link" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((data.profile.activity || 'atividade fisica') + ' perto de mim')}" target="_blank" rel="noopener">📍 Buscar no Google Maps</a>`}</div><div class="meeting-point-meta"><span><strong>${count}</strong> interessados</span><span>${escapeHtml(point.activities.slice(0, 2).join(' · '))}</span></div><button class="${joined ? 'secondary' : 'primary'} meeting-point-button" data-meeting-point="${point.id}">${joined ? 'Você está neste ponto' : 'Quero encontrar pessoas aqui'}</button></article>`; }).join('')}</div></section>`; }
 function initMeetingMap() {
   if (!window.L || !document.querySelector('#meeting-map')) return;
   const points = meetingPointsForUser().filter(point => point.id !== 'qualquer-cidade');
@@ -692,6 +766,7 @@ function initMeetingMap() {
 let liveLocationSharing = false;
 let liveLocationPeers = [];
 let mapPeersLoaded = false;
+let communityDataLoaded = false;
 async function loadLiveLocationPeers() {
   try { liveLocationPeers = (await apiRequest('/api/live-location')) || []; } catch { /* Mantém a última lista carregada. */ }
   if (currentView === 'map') render();
@@ -1098,6 +1173,17 @@ function bindEvents() {
   document.querySelector('[data-fit-meeting-map]')?.addEventListener('click', fitMeetingMap);
   document.querySelector('[data-toggle-live-location]')?.addEventListener('click', toggleLiveLocationSharing);
   document.querySelectorAll('[data-open-drawer]').forEach(button => button.addEventListener('click', openSportDrawer));
+  document.querySelector('[data-create-pickup-event]')?.addEventListener('click', openCreatePickupEventModal);
+  document.querySelectorAll('[data-pickup-event]').forEach(button => button.addEventListener('click', async () => {
+    const id = button.dataset.pickupEvent;
+    const joined = button.dataset.joined === 'true';
+    button.disabled = true;
+    try {
+      if (joined) { await apiRequest(`/api/pickup-events/${id}/join`, { method: 'DELETE' }); toast('Você saiu do jogo'); }
+      else { await apiRequest(`/api/pickup-events/${id}/join`, { method: 'POST' }); toast('Você entrou no jogo!'); }
+      await loadPickupEvents();
+    } catch { toast('Não foi possível agora'); button.disabled = false; }
+  }));
   document.querySelectorAll('[data-meeting-point]').forEach(button => button.addEventListener('click', () => { const id = button.dataset.meetingPoint; data.community.meetingPointIds = data.community.meetingPointIds || []; if (data.community.meetingPointIds.includes(id)) return; data.community.meetingPointIds.push(id); save(); render(); toast('Você entrou nesse ponto de encontro'); }));
   document.querySelector('#chat-form')?.addEventListener('submit', event => { event.preventDefault(); const input = event.target.message; if (input.value.trim()) replyTo(input.value.trim()); });
   document.querySelector('[data-edit-routine]')?.addEventListener('click', () => { data.profile.time = prompt('Qual será o novo horário?', data.profile.time) || data.profile.time; data.profile.location = prompt('Onde você pratica?', data.profile.location) || data.profile.location; data.profile.duration = Number(prompt('Duração em minutos?', data.profile.duration)) || data.profile.duration; save(); render(); toast('Rotina atualizada'); });
