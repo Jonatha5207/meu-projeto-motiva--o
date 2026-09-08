@@ -22,8 +22,8 @@ function notificationCopy(type, ctx = {}) {
     case 'T_MINUS_60': return { title: 'Hoje tem treino', body: 'Bora treinar?' };
     case 'T_MINUS_45': return { title: 'Vamos nos preparar?', body: 'Já separou sua roupa?' };
     case 'T_MINUS_30': return { title: 'Estou com você', body: 'Como está sua vontade de ir hoje? De 0 a 10.' };
-    case 'T_MINUS_20': return { title: 'Só o próximo passo', body: 'Percebi que você ainda não foi. Está tudo bem. O que está acontecendo?' };
-    case 'POST_TRAINING': return { title: 'E aí, você foi?', body: 'Conta pra mim como foi hoje. Sem julgamento, só quero saber de você.' };
+    case 'T_MINUS_20': return { title: 'Só o próximo passo', body: 'Ainda dá tempo. Tudo bem?' };
+    case 'POST_TRAINING': return { title: 'E aí, você foi?', body: 'Como foi hoje?' };
     case 'DAILY_MOTIVATION': return { title: 'Companheiro', body: ctx.message || motivationalPhrases[Math.floor(Math.random() * motivationalPhrases.length)] };
     case 'STREAK_MILESTONE': return { title: 'Isso é constância', body: `Você completou ${ctx.count} treinos com o Companheiro. Isso não é sorte, é constância.` };
     case 'RE_ENGAGEMENT': return { title: 'Sem cobrança', body: 'Faz um tempo que a gente não se fala. Sem cobrança nenhuma — quer retomar quando fizer sentido para você?' };

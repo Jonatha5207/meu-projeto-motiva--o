@@ -19,16 +19,22 @@ export function registerPlacesRoutes({ json, requireUser }) {
           json(response, 200, { configured: true, results: [], error: placesData.status });
           return true;
         }
-        const results = (placesData.results || []).slice(0, 12).map(place => ({
-          id: place.place_id,
-          name: place.name,
-          address: place.vicinity || null,
-          rating: place.rating ?? null,
-          ratingsCount: place.user_ratings_total ?? null,
-          openNow: place.opening_hours?.open_now ?? null,
-          lat: place.geometry?.location?.lat ?? null,
-          lng: place.geometry?.location?.lng ?? null,
-        }));
+        const results = (placesData.results || [])
+          .map(place => ({
+            id: place.place_id,
+            name: place.name,
+            address: place.vicinity || null,
+            rating: place.rating ?? null,
+            ratingsCount: place.user_ratings_total ?? null,
+            openNow: place.opening_hours?.open_now ?? null,
+            lat: place.geometry?.location?.lat ?? null,
+            lng: place.geometry?.location?.lng ?? null,
+          }))
+          // So sugerimos lugares com boa reputacao (a pessoa pediu 4-5 estrelas);
+          // sem avaliacoes suficientes, nao da pra saber a qualidade -- deixamos de fora.
+          .filter(place => place.rating !== null && place.rating >= 4 && (place.ratingsCount || 0) >= 5)
+          .sort((a, b) => b.rating - a.rating)
+          .slice(0, 12);
         json(response, 200, { configured: true, results });
       } catch {
         json(response, 200, { configured: true, results: [], error: 'places_lookup_failed' });

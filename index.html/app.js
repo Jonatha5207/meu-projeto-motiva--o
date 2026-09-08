@@ -120,13 +120,13 @@ window.addEventListener('appinstalled', () => {
 });
 window.addEventListener('online', () => { if (currentView !== 'login') render(); });
 window.addEventListener('offline', () => { if (currentView !== 'login') render(); });
-if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type !== 'notification-opened') return; trackEvent('NOTIFICATION_OPENED', { type: event.data.key }); currentView = 'chat'; render(); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type !== 'notification-opened') return; trackEvent('NOTIFICATION_OPENED', { type: event.data.key }); currentView = 'chat'; render(); if (event.data.text) window.setTimeout(() => playHumanMotivation(event.data.text), 120); });
 
 function load() {
   try { return { ...initialData, ...JSON.parse(localStorage.getItem(STORAGE_KEY)) }; } catch { return initialData; }
 }
 function speakWelcome(name) {
-  speakMotivation(`Oi, ${name}. Eu sou seu Companheiro. Vou estar com você nos dias bons e nos dias difíceis. Hoje a gente só precisa dar um pequeno passo.`);
+  playHumanMotivation(`Oi, ${name}. Eu sou seu Companheiro. Vou estar com você nos dias bons e nos dias difíceis. Hoje a gente só precisa dar um pequeno passo.`);
 }
 let googleClientId = null;
 async function loadGoogleClientId() {
@@ -410,6 +410,7 @@ async function enableNotifications() {
   const welcome = 'Bora treinar?';
   await showAppNotification('Companheiro ativado', { body: welcome, tag: 'companheiro-enabled', silent: false, vibrate: [180, 80, 180], data: { type: 'companheiro-notification', key: 'enabled', text: welcome } });
   scheduleTrainingNotifications();
+  playHumanMotivation(welcome);
   toast('Notificações ativadas');
 }
 
@@ -725,7 +726,7 @@ async function openCreatePickupEventModal() {
   const values = await openModal({
     title: 'Marcar um jogo',
     fields: [
-      { id: 'title', label: 'Título', value: `${data.profile.activity} com a galera` },
+      { id: 'activity', label: 'Modalidade', type: 'select', options: sportCatalog, value: data.profile.activity },
       { id: 'location_name', label: 'Local' },
       { id: 'scheduled_at', label: 'Data e hora', type: 'datetime-local' },
       { id: 'duration_minutes', label: 'Duração (minutos)', value: 60, type: 'number', min: 15, max: 480 },
@@ -735,12 +736,13 @@ async function openCreatePickupEventModal() {
     confirmText: 'Marcar jogo',
   });
   if (!values) return;
-  const title = values.title?.trim();
+  const activity = values.activity?.trim();
+  const title = `${activity} com a galera`;
   const locationName = values.location_name?.trim();
-  if (!title || !locationName || !values.scheduled_at) { toast('Preencha título, local e data'); return; }
+  if (!activity || !locationName || !values.scheduled_at) { toast('Preencha modalidade, local e data'); return; }
   try {
     await apiRequest('/api/pickup-events', { method: 'POST', body: JSON.stringify({
-      title, activity: data.profile.activity, location_name: locationName,
+      title, activity, location_name: locationName,
       scheduled_at: new Date(values.scheduled_at).toISOString(),
       duration_minutes: Number(values.duration_minutes) || 60,
       price_cents: Math.round((Number(values.price_cents) || 0) * 100),
@@ -1083,7 +1085,7 @@ function openModal({ title, message, fields = [], confirmText = 'Salvar', cancel
   return new Promise(resolve => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.innerHTML = `<div class="modal-sheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}"><h3>${escapeHtml(title)}</h3>${message ? `<p class="small">${escapeHtml(message)}</p>` : ''}${fields.map(field => `<label class="field-label" for="modal-${field.id}">${escapeHtml(field.label)}</label><input id="modal-${field.id}" class="text-input" type="${field.type || 'text'}" value="${escapeHtml(field.value ?? '')}" ${field.min !== undefined ? `min="${field.min}"` : ''} ${field.max !== undefined ? `max="${field.max}"` : ''} />`).join('')}<div class="modal-actions"><button type="button" class="secondary" data-modal-cancel>${escapeHtml(cancelText)}</button><button type="button" class="${danger ? 'danger-action modal-danger' : 'primary'}" data-modal-confirm>${escapeHtml(confirmText)}</button></div></div>`;
+    overlay.innerHTML = `<div class="modal-sheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}"><h3>${escapeHtml(title)}</h3>${message ? `<p class="small">${escapeHtml(message)}</p>` : ''}${fields.map(field => `<label class="field-label" for="modal-${field.id}">${escapeHtml(field.label)}</label>${field.type === 'select' ? `<select id="modal-${field.id}" class="text-input">${(field.options || []).map(option => `<option value="${escapeHtml(option)}" ${option === field.value ? 'selected' : ''}>${escapeHtml(option)}</option>`).join('')}</select>` : `<input id="modal-${field.id}" class="text-input" type="${field.type || 'text'}" value="${escapeHtml(field.value ?? '')}" ${field.min !== undefined ? `min="${field.min}"` : ''} ${field.max !== undefined ? `max="${field.max}"` : ''} />`}`).join('')}<div class="modal-actions"><button type="button" class="secondary" data-modal-cancel>${escapeHtml(cancelText)}</button><button type="button" class="${danger ? 'danger-action modal-danger' : 'primary'}" data-modal-confirm>${escapeHtml(confirmText)}</button></div></div>`;
     document.body.appendChild(overlay);
     const close = result => { overlay.remove(); resolve(result); };
     overlay.querySelector('[data-modal-cancel]').addEventListener('click', () => close(null));
