@@ -524,7 +524,7 @@ function renderToday() {
   </section>`;
 }
 function trainingDate() { const [hours, minutes] = data.profile.time.split(':').map(Number); const date = new Date(); date.setHours(hours || 19, minutes || 0, 0, 0); return date; }
-function todayKey(date = new Date()) { return date.toISOString().slice(0, 10); }
+function todayKey(date = new Date()) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
 function currentDateLabel(date = new Date()) { return date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' }); }
 const SPORT_CATEGORY_ICON_PATHS = {
   endurance: '<path d="M3 12h4l2-7 4 14 2-7h6"/>',
