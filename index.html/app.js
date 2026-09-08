@@ -43,7 +43,7 @@ const sportMotivations = {
 const initialData = {
   authenticated: false,
   onboarded: false,
-  profile: { name: 'João', activity: 'Academia', activities: ['Academia'], frequency: 3, days: ['Segunda', 'Quarta', 'Sexta'], scheduleByDay: {}, time: '19:00', duration: 45, location: 'Não informado', commuteTime: 'Não informado', transport: 'Não informado', activeSchedule: true, notificationsEnabled: false, goal: 'Cuidar de mim', motivation: '', personalizedMotivation: '', difficulty: 'Manter constância', objections: ['Cansaço'], objection: 'Cansaço', disciplineLevel: 'Estou começando agora.', workStatus: 'Não informado', studyStatus: 'Não informado', hasChildren: 'Não informado' },
+  profile: { name: 'João', activity: 'Academia', activities: [], frequency: 3, days: ['Segunda', 'Quarta', 'Sexta'], scheduleByDay: {}, time: '19:00', duration: 45, location: 'Não informado', commuteTime: 'Não informado', transport: 'Não informado', activeSchedule: true, notificationsEnabled: false, goal: 'Cuidar de mim', motivation: '', personalizedMotivation: '', difficulty: 'Manter constância', objections: [], objection: 'Cansaço', disciplineLevel: 'Estou começando agora.', workStatus: 'Não informado', studyStatus: 'Não informado', hasChildren: 'Não informado' },
   session: { status: 'PENDING', date: new Date().toISOString(), activity: 'Academia', time: '19:00', journey: {}, confirmed: false },
   messages: [{ from: 'app', text: 'Hoje tem treino. Vamos começar a nos preparar?' }],
   history: [],
@@ -80,8 +80,8 @@ data.community.meetingPointIds = data.community.meetingPointIds || [];
 data.community.posts = data.community.posts || initialData.community.posts;
 data.customization = { ...initialData.customization, ...(data.customization || {}) };
 if (isFirstEverLaunch && window.matchMedia) data.customization.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-data.profile.activities = data.profile.activities || [data.profile.activity];
-data.profile.objections = data.profile.objections || (data.profile.objection ? [data.profile.objection] : []);
+data.profile.activities = data.profile.activities || (data.onboarded ? [data.profile.activity] : []);
+data.profile.objections = data.profile.objections || (data.onboarded && data.profile.objection ? [data.profile.objection] : []);
 data.profile.scheduleByDay = data.profile.scheduleByDay || {};
 data.profile.time = data.profile.time || data.session.time || '19:00';
 data.profile.days = selectedDaysForFrequency(data.profile.frequency, data.profile.days);
