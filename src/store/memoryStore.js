@@ -168,6 +168,7 @@ export function createMemoryStore({ dataDir }) {
     },
     async joinPickupEvent(eventId, userId) { if (!pickupEventParticipants.has(eventId)) pickupEventParticipants.set(eventId, new Set()); pickupEventParticipants.get(eventId).add(userId); },
     async leavePickupEvent(eventId, userId) { pickupEventParticipants.get(eventId)?.delete(userId); },
+    async deletePickupEvent(eventId) { pickupEvents.delete(eventId); pickupEventParticipants.delete(eventId); },
     async listPickupEventParticipants(eventId) { return [...(pickupEventParticipants.get(eventId) || [])].map(userId => ({ event_id: eventId, user_id: userId })); },
 
     async load() {

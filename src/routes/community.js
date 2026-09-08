@@ -83,6 +83,13 @@ export function registerCommunityRoutes({ json, readJsonBody, requireUser, servi
       json(response, 204, {});
       return true;
     }
+    if (request.url?.match(/^\/api\/pickup-events\/[^/]+$/) && request.method === 'DELETE') {
+      const user = await requireUser(request, response); if (!user) return true;
+      const id = request.url.split('/')[3];
+      await services.community.cancelPickupEvent(user.id, id);
+      json(response, 204, {});
+      return true;
+    }
     return false;
   };
 }

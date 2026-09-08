@@ -376,6 +376,9 @@ export function createPostgresStore({ connectionString, ssl = true, logger }) {
     async leavePickupEvent(eventId, userId) {
       await query('delete from pickup_event_participants where event_id = $1 and user_id = $2', [eventId, userId]);
     },
+    async deletePickupEvent(eventId) {
+      await query('delete from pickup_events where id = $1', [eventId]);
+    },
     async listPickupEventParticipants(eventId) {
       const { rows } = await query('select * from pickup_event_participants where event_id = $1', [eventId]);
       return rows;

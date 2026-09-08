@@ -188,6 +188,7 @@ function connectSocialRealtime() {
   socialRealtime.addEventListener('live-location-removed', event => { const payload = JSON.parse(event.data); liveLocationPeers = liveLocationPeers.filter(item => item.user_id !== payload.userId); if (currentView === 'map') render(); });
   socialRealtime.addEventListener('pickup-event-created', () => { if (currentView === 'map') loadPickupEvents(); });
   socialRealtime.addEventListener('pickup-event-updated', () => { if (currentView === 'map') loadPickupEvents(); });
+  socialRealtime.addEventListener('pickup-event-cancelled', () => { if (currentView === 'map') loadPickupEvents(); });
   socialRealtime.onerror = () => { socialRealtime?.close(); socialRealtime = null; window.setTimeout(connectSocialRealtime, 5000); };
 }
 async function loadCommunityData() {
@@ -717,11 +718,19 @@ function renderPickupEventCard(event) {
   const full = event.spots_taken >= event.max_spots;
   const avatars = event.participants.slice(0, 5).map(person => `<span class="pickup-avatar">${escapeHtml((person.name || '?')[0])}</span>`).join('');
   const extra = event.participants.length > 5 ? `<span class="pickup-avatar pickup-avatar-more">+${event.participants.length - 5}</span>` : '';
-  return `<article class="card pickup-event-card"><div class="pickup-event-head"><div class="meeting-point-icon">${sportIcon(event.activity)}</div><div><h3>${escapeHtml(event.title)}</h3><p class="small">${escapeHtml(event.location_name)}</p></div><span class="status-pill ${full ? 'status-neutral' : 'status-active'}">${event.spots_taken}/${event.max_spots} vagas</span></div><div class="pickup-event-meta"><span>📅 ${formatEventDateTime(event.scheduled_at)}</span><span>⏱ ${event.duration_minutes} min</span><span>💰 ${formatEventPrice(event.price_cents)}</span></div>${event.participants.length ? `<div class="pickup-event-participants">${avatars}${extra}</div>` : ''}<button class="${event.joined ? 'secondary' : 'primary'} pickup-event-button" data-pickup-event="${event.id}" data-joined="${event.joined}" ${full && !event.joined ? 'disabled' : ''}>${event.joined ? 'Sair do jogo' : full ? 'Lotado' : 'Participar'}</button></article>`;
+  const terms = pickupEventTerms(event.activity);
+  const isCreator = event.creator_id === data.userId;
+  const actionLabel = isCreator ? `Cancelar ${terms.noun}` : event.joined ? `Sair do ${terms.noun}` : full ? 'Lotado' : 'Participar';
+  return `<article class="card pickup-event-card"><div class="pickup-event-head"><div class="meeting-point-icon">${sportIcon(event.activity)}</div><div><h3>${escapeHtml(event.title)}</h3><p class="small">${escapeHtml(event.location_name)}</p></div><span class="status-pill ${full ? 'status-neutral' : 'status-active'}">${event.spots_taken}/${event.max_spots} ${terms.people}</span></div><div class="pickup-event-meta"><span>📅 ${formatEventDateTime(event.scheduled_at)}</span><span>⏱ ${event.duration_minutes} min</span><span>💰 ${formatEventPrice(event.price_cents)}</span></div>${event.participants.length ? `<div class="pickup-event-participants">${avatars}${extra}</div>` : ''}<button class="${isCreator || event.joined ? 'secondary' : 'primary'} pickup-event-button" data-pickup-event="${event.id}" data-joined="${event.joined}" data-creator="${isCreator}" ${full && !event.joined ? 'disabled' : ''}>${actionLabel}</button></article>`;
+}
+function pickupEventTerms(activity) {
+  const isTeam = sportLayout(activity).slug === 'team';
+  return isTeam ? { noun: 'jogo', people: 'jogadores', verbCreate: 'Marcar um jogo' } : { noun: 'encontro', people: 'participantes', verbCreate: 'Marcar um encontro' };
 }
 function renderPickupEventsSection() {
   const relevant = pickupEvents.filter(event => event.activity === data.profile.activity);
-  return `<div class="section-title"><div class="stat-line"><h3>Jogos marcados</h3><span class="status-pill">${relevant.length}</span></div></div><button class="secondary" style="width:100%;margin-bottom:14px" data-create-pickup-event>+ Marcar um jogo de ${escapeHtml(data.profile.activity)}</button><div class="pickup-event-list">${relevant.length ? relevant.map(renderPickupEventCard).join('') : '<p class="small">Nenhum jogo marcado ainda para essa modalidade. Que tal marcar o primeiro?</p>'}</div>`;
+  const terms = pickupEventTerms(data.profile.activity);
+  return `<div class="section-title"><div class="stat-line"><h3>${terms.noun === 'jogo' ? 'Jogos marcados' : 'Encontros marcados'}</h3><span class="status-pill">${relevant.length}</span></div></div><button class="secondary" style="width:100%;margin-bottom:14px" data-create-pickup-event>+ ${terms.verbCreate} de ${escapeHtml(data.profile.activity)}</button><div class="pickup-event-list">${relevant.length ? relevant.map(renderPickupEventCard).join('') : `<p class="small">Nenhum ${terms.noun} marcado ainda para essa modalidade. Que tal marcar o primeiro?</p>`}</div>`;
 }
 async function openCreatePickupEventModal() {
   const location = await openLocationPickerModal();
@@ -1268,10 +1277,16 @@ function bindEvents() {
   document.querySelectorAll('[data-pickup-event]').forEach(button => button.addEventListener('click', async () => {
     const id = button.dataset.pickupEvent;
     const joined = button.dataset.joined === 'true';
+    const isCreator = button.dataset.creator === 'true';
+    if (isCreator) {
+      const ok = await openConfirm('Cancelar', 'Tem certeza que quer cancelar este encontro? Isso avisa quem já entrou.', { danger: true, confirmText: 'Cancelar encontro' });
+      if (!ok) return;
+    }
     button.disabled = true;
     try {
-      if (joined) { await apiRequest(`/api/pickup-events/${id}/join`, { method: 'DELETE' }); toast('Você saiu do jogo'); }
-      else { await apiRequest(`/api/pickup-events/${id}/join`, { method: 'POST' }); toast('Você entrou no jogo!'); }
+      if (isCreator) { await apiRequest(`/api/pickup-events/${id}`, { method: 'DELETE' }); toast('Encontro cancelado'); }
+      else if (joined) { await apiRequest(`/api/pickup-events/${id}/join`, { method: 'DELETE' }); toast('Você saiu'); }
+      else { await apiRequest(`/api/pickup-events/${id}/join`, { method: 'POST' }); toast('Você entrou!'); }
       await loadPickupEvents();
     } catch { toast('Não foi possível agora'); button.disabled = false; }
   }));

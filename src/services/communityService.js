@@ -181,5 +181,13 @@ export function createCommunityService({ store }) {
       await store.leavePickupEvent(eventId, userId);
       broadcastRealtime('pickup-event-updated', { id: eventId });
     },
+
+    async cancelPickupEvent(userId, eventId) {
+      const event = await store.getPickupEvent(eventId);
+      if (!event) throw notFound('pickup_event_not_found');
+      if (event.creator_id !== userId) throw new AppError(403, 'not_event_creator');
+      await store.deletePickupEvent(eventId);
+      broadcastRealtime('pickup-event-cancelled', { id: eventId, activity: event.activity });
+    },
   };
 }
