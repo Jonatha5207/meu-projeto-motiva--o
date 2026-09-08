@@ -238,7 +238,7 @@ function applyCustomization() {
   root.dataset.sport = sportKey(data.profile.activity);
   document.title = data.customization.appName || 'Companheiro';
 }
-function icon(name) { const paths = { home: '<path d="m4 10 8-6 8 6v10H4Z"/><path d="M9 20v-6h6v6"/>', today: '<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1Z"/>', routine: '<path d="M5 5h14M5 12h9M5 19h5"/><path d="M18 15v6M15 18h6"/>', map: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>', community: '<path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7" r="3"/><path d="M17 11a3 3 0 1 0-1.2-5.75M20 20v-1.5a4 4 0 0 0-2.5-3.7"/>', history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/>', profile: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>', back: '<path d="M19 12H5m6-6-6 6 6 6"/>', send: '<path d="m4 12 16-8-5 16-3-6-8-2Z"/><path d="m12 14 3-3"/>' }; return `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || '<circle cx="12" cy="12" r="3"/>'}</svg>`; }
+function icon(name) { const paths = { home: '<path d="m4 10 8-6 8 6v10H4Z"/><path d="M9 20v-6h6v6"/>', today: '<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1Z"/>', routine: '<path d="M5 5h14M5 12h9M5 19h5"/><path d="M18 15v6M15 18h6"/>', map: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>', community: '<path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7" r="3"/><path d="M17 11a3 3 0 1 0-1.2-5.75M20 20v-1.5a4 4 0 0 0-2.5-3.7"/>', history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/>', profile: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>', back: '<path d="M19 12H5m6-6-6 6 6 6"/>', send: '<path d="m4 12 16-8-5 16-3-6-8-2Z"/><path d="m12 14 3-3"/>', menu: '<path d="M4 6h16M4 12h16M4 18h16"/>' }; return `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || '<circle cx="12" cy="12" r="3"/>'}</svg>`; }
 function levelInfo() {
   const level = Math.floor(data.rewards.points / 100) + 1;
   return { level, progress: data.rewards.points % 100, next: level * 100 };
@@ -505,7 +505,29 @@ function renderConnectionChat() {
   const messages = data.community.messages[connectionId] || [];
   return `<section class="screen chat-wrap connection-chat-screen"><div class="chat-topline"><button class="icon-button" data-view="community" aria-label="Voltar">←</button><div class="companion-avatar">${escapeHtml(otherName[0] || '?')}</div><div><strong>${escapeHtml(otherName)}</strong><p class="small">${connection?.online ? 'online agora' : 'offline'}</p></div></div><div class="chat-messages">${messages.length ? messages.map(message => `<div class="bubble ${message.sender_id === data.userId ? 'user' : ''}">${escapeHtml(message.text)}</div>`).join('') : '<p class="small">Nenhuma mensagem ainda. Diga oi!</p>'}</div><form class="chat-form" id="connection-chat-form"><input class="text-input" id="connection-chat-input" placeholder="Escreva uma mensagem" autocomplete="off" /><button class="send" type="submit">➤</button></form></section>`;
 }
-function header(title, kicker = 'COMPANHEIRO') { const initial = String(data.profile.name || 'C').trim().charAt(0).toUpperCase(); return `<div class="topline app-header"><div class="header-copy"><div class="eyebrow">${kicker}</div><h2>${title}</h2><span class="header-date">${currentDateLabel()}</span></div><div class="header-actions"><span class="offline-badge">${navigator.onLine ? 'online' : 'offline pronto'}</span><button class="profile-avatar" aria-label="Abrir perfil" data-view="profile">${initial}</button></div></div>`; }
+function header(title, kicker = 'COMPANHEIRO') { const initial = String(data.profile.name || 'C').trim().charAt(0).toUpperCase(); return `<div class="topline app-header"><div class="header-lead"><button class="icon-button drawer-trigger" type="button" data-open-drawer aria-label="Abrir modalidades">${icon('menu')}</button><div class="header-copy"><div class="eyebrow">${kicker}</div><h2>${title}</h2><span class="header-date">${currentDateLabel()}</span></div></div><div class="header-actions"><span class="offline-badge">${navigator.onLine ? 'online' : 'offline pronto'}</span><button class="profile-avatar" aria-label="Abrir perfil" data-view="profile">${initial}</button></div></div>`; }
+function openSportDrawer() {
+  const overlay = document.createElement('div');
+  overlay.className = 'drawer-overlay';
+  overlay.innerHTML = `<nav class="drawer-panel"><div class="drawer-header"><div><span class="eyebrow" style="color:#b9d4bf">MODALIDADES</span><strong>Escolha seu esporte</strong></div><button class="icon-button" type="button" data-drawer-close aria-label="Fechar">×</button></div><div class="drawer-list">${sportCatalog.map(sport => `<button type="button" class="drawer-item ${sport === data.profile.activity ? 'selected' : ''}" data-drawer-sport="${escapeHtml(sport)}"><span class="drawer-item-icon">${sportIcon(sport)}</span><span>${escapeHtml(sport)}</span></button>`).join('')}</div></nav>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('open'));
+  const close = () => { overlay.classList.remove('open'); window.setTimeout(() => overlay.remove(), 220); };
+  overlay.querySelector('[data-drawer-close]').addEventListener('click', close);
+  overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+  overlay.querySelectorAll('[data-drawer-sport]').forEach(button => button.addEventListener('click', () => {
+    const sport = button.dataset.drawerSport;
+    data.profile.activity = sport;
+    data.profile.activities = [...new Set([sport, ...(data.profile.activities || [])])];
+    data.customization.sport = sport;
+    data.customization.accent = sportAccent[sport] || data.customization.accent;
+    applyCustomization();
+    save();
+    close();
+    render();
+    toast(`Modalidade ajustada para ${sport}`);
+  }));
+}
 function renderToday() {
   const status = data.session.status;
   const completed = status === 'COMPLETED';
@@ -1075,6 +1097,7 @@ function bindEvents() {
   document.querySelector('[data-center-map]')?.addEventListener('click', centerMap);
   document.querySelector('[data-fit-meeting-map]')?.addEventListener('click', fitMeetingMap);
   document.querySelector('[data-toggle-live-location]')?.addEventListener('click', toggleLiveLocationSharing);
+  document.querySelectorAll('[data-open-drawer]').forEach(button => button.addEventListener('click', openSportDrawer));
   document.querySelectorAll('[data-meeting-point]').forEach(button => button.addEventListener('click', () => { const id = button.dataset.meetingPoint; data.community.meetingPointIds = data.community.meetingPointIds || []; if (data.community.meetingPointIds.includes(id)) return; data.community.meetingPointIds.push(id); save(); render(); toast('Você entrou nesse ponto de encontro'); }));
   document.querySelector('#chat-form')?.addEventListener('submit', event => { event.preventDefault(); const input = event.target.message; if (input.value.trim()) replyTo(input.value.trim()); });
   document.querySelector('[data-edit-routine]')?.addEventListener('click', () => { data.profile.time = prompt('Qual será o novo horário?', data.profile.time) || data.profile.time; data.profile.location = prompt('Onde você pratica?', data.profile.location) || data.profile.location; data.profile.duration = Number(prompt('Duração em minutos?', data.profile.duration)) || data.profile.duration; save(); render(); toast('Rotina atualizada'); });
