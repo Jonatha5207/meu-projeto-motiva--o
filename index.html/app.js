@@ -582,9 +582,20 @@ const SPORT_CATEGORY_ICON_PATHS = {
   urban: '<path d="M3 18 9 8l4 6 2-3 6 7Z"/>',
   direct: '<path d="M12 3l2.2 5.8L21 10l-4.5 3.6L18 20l-6-3.6L6 20l1.5-6.4L3 10l6.8-1.2Z"/>'
 };
+const SPORT_SPECIFIC_ICON_PATHS = {
+  ciclismo: '<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17 10 8h5l3 9M10 8l2 5h6"/>',
+  surf: '<path d="M12 2c1.8 4.5 2.4 10.5.8 18.5"/><path d="M3 19c3-1.8 6-1.8 9 0s6 1.8 9 0"/>',
+  remo: '<path d="M3 21 21 3"/><ellipse cx="5.5" cy="18.5" rx="2.3" ry="1.3" transform="rotate(-45 5.5 18.5)"/><ellipse cx="18.5" cy="5.5" rx="2.3" ry="1.3" transform="rotate(-45 18.5 5.5)"/>',
+  canoagem: '<path d="M3 21 21 3"/><ellipse cx="5.5" cy="18.5" rx="2.3" ry="1.3" transform="rotate(-45 5.5 18.5)"/><ellipse cx="18.5" cy="5.5" rx="2.3" ry="1.3" transform="rotate(-45 18.5 5.5)"/>',
+  natacao: '<path d="M3 12c2-3 5-3 7 0s5 3 7 0 5-3 7 0"/><path d="M3 18c2-2 5-2 7 0s5 2 7 0 5-2 7 0"/>',
+  corrida: '<circle cx="15" cy="5" r="2"/><path d="M9 21l2-6-3-2 2-4 4 1 3 4-2 6"/>',
+  skate: '<path d="M4 15h16M6 9l12 6"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/>',
+};
 function sportIcon(activity = data.profile.activity) {
+  const key = sportKey(activity);
+  const specific = SPORT_SPECIFIC_ICON_PATHS[key];
   const slug = sportLayout(activity).slug;
-  const path = SPORT_CATEGORY_ICON_PATHS[slug] || SPORT_CATEGORY_ICON_PATHS.direct;
+  const path = specific || SPORT_CATEGORY_ICON_PATHS[slug] || SPORT_CATEGORY_ICON_PATHS.direct;
   return `<svg class="sport-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
 }
 function sportKey(activity = data.profile.activity) { return String(activity).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-'); }
