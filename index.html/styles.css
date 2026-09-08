@@ -299,7 +299,10 @@ h3 { font-size: 16px; font-weight: 700; }
 .message-avatar { width: 27px; height: 27px; margin-top: 4px; font-size: 12px; }
 .message-row { display: flex; align-items: flex-start; gap: 8px; }
 .message-user { justify-content: flex-end; }
-.bubble time { display: block; margin-top: 6px; opacity: .55; font-size: 10px; }
+.bubble-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.bubble time { opacity: .55; font-size: 10px; }
+.bubble-listen { border: 0; background: transparent; padding: 2px 4px; font-size: 13px; line-height: 1; opacity: .6; }
+.bubble-listen:hover { opacity: 1; }
 .quick-reply-label { margin-bottom: 7px; }
 .chat-messages { flex: 1; display: flex; flex-direction: column; gap: 13px; padding: 26px 0 18px; }
 .bubble { max-width: 84%; border-radius: 18px 18px 18px 5px; padding: 13px 15px; line-height: 1.42; font-size: 14px; }
