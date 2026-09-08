@@ -177,6 +177,18 @@ create table if not exists direct_messages (
   created_at timestamptz not null default now()
 );
 create index if not exists idx_direct_messages_connection on direct_messages(connection_id, created_at);
+-- Localizacao ao vivo: opt-in, uma linha por usuario (upsert), sempre com expiracao.
+-- lat/lng chegam arredondados (~3 casas decimais, ~100m) desde o front-end -- o
+-- backend nunca recebe nem guarda a coordenada exata do GPS.
+create table if not exists live_locations (
+  user_id uuid primary key references users(id) on delete cascade,
+  lat double precision not null,
+  lng double precision not null,
+  activity text,
+  started_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+create index if not exists idx_live_locations_expires on live_locations(expires_at);
 create index if not exists idx_sessions_user_date on training_sessions(user_id, scheduled_at);
 create index if not exists idx_schedules_user_weekday on training_schedules(user_id, weekday, scheduled_time);
 create index if not exists idx_events_name on analytics_events(event_name, created_at);

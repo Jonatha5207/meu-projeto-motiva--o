@@ -39,6 +39,24 @@ export function registerCommunityRoutes({ json, readJsonBody, requireUser, servi
       json(response, 201, message);
       return true;
     }
+    if (request.url === '/api/live-location' && request.method === 'GET') {
+      const user = await requireUser(request, response); if (!user) return true;
+      json(response, 200, await services.community.listLiveLocations());
+      return true;
+    }
+    if (request.url === '/api/live-location' && request.method === 'POST') {
+      const user = await requireUser(request, response); if (!user) return true;
+      const input = await readJsonBody(request);
+      const entry = await services.community.startLiveLocation(user.id, input);
+      json(response, 200, entry);
+      return true;
+    }
+    if (request.url === '/api/live-location' && request.method === 'DELETE') {
+      const user = await requireUser(request, response); if (!user) return true;
+      await services.community.stopLiveLocation(user.id);
+      json(response, 204, {});
+      return true;
+    }
     return false;
   };
 }

@@ -337,6 +337,23 @@ export function createPostgresStore({ connectionString, ssl = true, logger }) {
       return message;
     },
 
+    async upsertLiveLocation(entry) {
+      await query(
+        `insert into live_locations (user_id, lat, lng, activity, started_at, expires_at)
+         values ($1, $2, $3, $4, $5, $6)
+         on conflict (user_id) do update set lat = excluded.lat, lng = excluded.lng, activity = excluded.activity, started_at = excluded.started_at, expires_at = excluded.expires_at`,
+        [entry.user_id, entry.lat, entry.lng, entry.activity || null, entry.started_at, entry.expires_at],
+      );
+      return entry;
+    },
+    async deleteLiveLocation(userId) {
+      await query('delete from live_locations where user_id = $1', [userId]);
+    },
+    async listActiveLiveLocations() {
+      const { rows } = await query('select * from live_locations where expires_at > now()', []);
+      return rows;
+    },
+
     async load() { /* Postgres não precisa de carga manual: os dados já vivem no banco. */ },
     persist() { /* Cada método já grava direto no banco; não há snapshot a salvar. */ },
     async ping() { await query('select 1', []); return true; },

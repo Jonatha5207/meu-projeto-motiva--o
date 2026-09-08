@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { cleanText } from '../lib/http.js';
 import { AppError, badRequest, notFound } from '../lib/errors.js';
-import { isUserOnline, sendToUser } from '../lib/realtime.js';
+import { isUserOnline, sendToUser, broadcastRealtime } from '../lib/realtime.js';
+
+const LIVE_LOCATION_DURATION_MS = 2 * 60 * 60 * 1000; // 2 horas: some sozinho se a pessoa esquecer de desligar.
 
 async function requireAcceptedConnection(store, userId, connectionId) {
   const connection = await store.getConnection(connectionId);
@@ -92,6 +94,30 @@ export function createCommunityService({ store }) {
       const sender = await store.getUserById(userId);
       sendToUser(recipientId, 'dm-received', { ...message, sender: { id: sender.id, name: sender.name } });
       return message;
+    },
+
+    async startLiveLocation(userId, { lat, lng, activity } = {}) {
+      // Arredondado a ~3 casas decimais (~100m) antes de sair do front-end: o backend
+      // nunca recebe nem guarda a coordenada exata do GPS da pessoa.
+      const roundedLat = Math.round(Number(lat) * 1000) / 1000;
+      const roundedLng = Math.round(Number(lng) * 1000) / 1000;
+      if (!Number.isFinite(roundedLat) || !Number.isFinite(roundedLng) || Math.abs(roundedLat) > 90 || Math.abs(roundedLng) > 180) throw badRequest('invalid_coordinates');
+      const startedAt = new Date();
+      const expiresAt = new Date(startedAt.getTime() + LIVE_LOCATION_DURATION_MS);
+      const entry = { user_id: userId, lat: roundedLat, lng: roundedLng, activity: cleanText(activity, 60) || null, started_at: startedAt.toISOString(), expires_at: expiresAt.toISOString() };
+      await store.upsertLiveLocation(entry);
+      const user = await store.getUserById(userId);
+      broadcastRealtime('live-location-updated', { userId, name: user.name, activity: entry.activity, lat: roundedLat, lng: roundedLng, expiresAt: entry.expires_at });
+      return entry;
+    },
+
+    async stopLiveLocation(userId) {
+      await store.deleteLiveLocation(userId);
+      broadcastRealtime('live-location-removed', { userId });
+    },
+
+    async listLiveLocations() {
+      return store.listActiveLiveLocations();
     },
   };
 }

@@ -39,6 +39,7 @@ export function createMemoryStore({ dataDir }) {
   const notificationState = new Map();
   const connections = [];
   const directMessages = new Map(); // connectionId -> message[]
+  const liveLocations = new Map(); // userId -> { user_id, lat, lng, activity, started_at, expires_at }
 
   function sessionsFor(userId) { if (!userSessions.has(userId)) userSessions.set(userId, []); return userSessions.get(userId); }
   function conversationsFor(userId) { if (!conversations.has(userId)) conversations.set(userId, []); return conversations.get(userId); }
@@ -149,6 +150,13 @@ export function createMemoryStore({ dataDir }) {
 
     async listDirectMessages(connectionId) { return messagesFor(connectionId); },
     async createDirectMessage(message) { messagesFor(message.connection_id).push(message); return message; },
+
+    async upsertLiveLocation(entry) { liveLocations.set(entry.user_id, entry); return entry; },
+    async deleteLiveLocation(userId) { liveLocations.delete(userId); },
+    async listActiveLiveLocations() {
+      const now = Date.now();
+      return [...liveLocations.values()].filter(item => new Date(item.expires_at).getTime() > now);
+    },
 
     async load() {
       try {
