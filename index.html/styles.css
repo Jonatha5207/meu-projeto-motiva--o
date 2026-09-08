@@ -161,6 +161,7 @@ h3 { font-size: 16px; font-weight: 700; }
 .pulse-chip .pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); flex: 0 0 auto; animation: presence-pulse 1.4s ease-out infinite; }
 @keyframes pulse-chip-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .connection-chat-screen .bubble { max-width: 78%; }
+.invite-friends-button { width: 100%; margin-top: 16px; }
 .pickup-event-list { display: grid; gap: 12px; margin-bottom: 24px; }
 .pickup-event-card { display: grid; gap: 12px; }
 .pickup-event-head { display: flex; align-items: center; gap: 12px; }
@@ -493,8 +494,12 @@ body { background-image: radial-gradient(circle at 14% 8%, rgba(215, 237, 119, .
 .feedback-card, .post-training-card { border-radius: 22px; box-shadow: 0 12px 30px rgba(23, 57, 42, .06); }
 .feedback-card { background: var(--sage); }
 .motivation-card { position: relative; overflow: hidden; padding: 22px; border-radius: 25px; background: linear-gradient(135deg, var(--peach) 0%, #f9c9ad 100%); box-shadow: 0 16px 32px rgba(156, 94, 61, .10); }
-.motivation-card::after { content: '✦'; position: absolute; right: 18px; top: 12px; color: rgba(113, 55, 25, .17); font-size: 45px; }
-.motivation-card p { max-width: 80%; font-size: 22px; line-height: 1.18; }
+.motivation-card::before { content: ''; position: absolute; inset: 0; background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.4) 48%, transparent 62%); transform: translateX(-120%); animation: motivation-shine 6s ease-in-out infinite; pointer-events: none; }
+.motivation-card::after { content: '✦'; position: absolute; right: 18px; top: 12px; color: rgba(113, 55, 25, .17); font-size: 45px; animation: motivation-sparkle 2.6s ease-in-out infinite; }
+.motivation-card p { position: relative; max-width: 80%; font-size: 22px; line-height: 1.18; }
+@keyframes motivation-shine { 0%, 45% { transform: translateX(-120%); } 65%, 100% { transform: translateX(120%); } }
+@keyframes motivation-sparkle { 0%, 100% { transform: scale(1) rotate(0deg); opacity: .17; } 50% { transform: scale(1.2) rotate(18deg); opacity: .32; } }
+@media (prefers-reduced-motion: reduce) { .motivation-card::before { animation: none; display: none; } .motivation-card::after { animation: none; } }
 .motivation-actions { position: relative; z-index: 1; }
 .audio-button { border: 1px solid rgba(23, 57, 42, .08); background: rgba(255, 255, 255, .55); }
 .audio-button:hover { background: white; }
