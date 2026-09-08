@@ -19,7 +19,7 @@ function scheduledFor(session, type, durationMinutes = 45) {
 
 function notificationCopy(type, ctx = {}) {
   switch (type) {
-    case 'T_MINUS_60': return { title: 'Hoje tem treino', body: `E aí! Hoje tem ${ctx.activity || 'treino'}. Vamos começar a nos preparar?` };
+    case 'T_MINUS_60': return { title: 'Hoje tem treino', body: 'Bora treinar?' };
     case 'T_MINUS_45': return { title: 'Vamos nos preparar?', body: 'Já separou sua roupa?' };
     case 'T_MINUS_30': return { title: 'Estou com você', body: 'Como está sua vontade de ir hoje? De 0 a 10.' };
     case 'T_MINUS_20': return { title: 'Só o próximo passo', body: 'Percebi que você ainda não foi. Está tudo bem. O que está acontecendo?' };

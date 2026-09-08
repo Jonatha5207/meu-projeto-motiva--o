@@ -120,7 +120,7 @@ window.addEventListener('appinstalled', () => {
 });
 window.addEventListener('online', () => { if (currentView !== 'login') render(); });
 window.addEventListener('offline', () => { if (currentView !== 'login') render(); });
-if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type !== 'notification-opened') return; trackEvent('NOTIFICATION_OPENED', { type: event.data.key }); currentView = 'chat'; render(); if (event.data.text) window.setTimeout(() => playHumanMotivation(event.data.text), 120); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type !== 'notification-opened') return; trackEvent('NOTIFICATION_OPENED', { type: event.data.key }); currentView = 'chat'; render(); });
 
 function load() {
   try { return { ...initialData, ...JSON.parse(localStorage.getItem(STORAGE_KEY)) }; } catch { return initialData; }
@@ -407,11 +407,10 @@ async function enableNotifications() {
   save();
   syncProfileWithBackend();
   await subscribeToPush();
-  const welcome = `Notificações ativadas. Hoje tem ${data.profile.activity}. Vamos começar?`;
+  const welcome = 'Bora treinar?';
   await showAppNotification('Companheiro ativado', { body: welcome, tag: 'companheiro-enabled', silent: false, vibrate: [180, 80, 180], data: { type: 'companheiro-notification', key: 'enabled', text: welcome } });
   scheduleTrainingNotifications();
-  playHumanMotivation(welcome);
-  toast('Notificações com mensagem e áudio ativadas');
+  toast('Notificações ativadas');
 }
 
 function render() {
