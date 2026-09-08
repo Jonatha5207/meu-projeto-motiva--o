@@ -36,7 +36,7 @@ const dataDir = join(root, '.data');
 const port = Number(process.env.PORT || 8000);
 const adminToken = process.env.ADMIN_TOKEN || 'dev-admin-token';
 
-const store = await createStore({ dataDir, logger });
+const store = await createStore({ dataDir, root, logger });
 
 const analyticsService = createAnalyticsService({ store });
 const authService = createAuthService({ store, analyticsService });
