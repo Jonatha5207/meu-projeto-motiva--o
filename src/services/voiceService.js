@@ -58,8 +58,8 @@ export function createVoiceService() {
     async realtimeCall(sdp) {
       if (!process.env.OPENAI_API_KEY) throw new AppError(501, 'configure_openai_api_key');
       const form = new FormData();
-      form.append('sdp', new Blob([sdp], { type: 'application/sdp' }), 'offer.sdp');
-      form.append('session', new Blob([JSON.stringify({ type: 'realtime', model: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime', output_modalities: ['audio'], instructions: 'Fale em português brasileiro. Seja humano, breve, acolhedor e não gere culpa.' })], { type: 'application/json' }));
+      form.append('sdp', sdp);
+      form.append('session', JSON.stringify({ type: 'realtime', model: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime', output_modalities: ['audio'], instructions: 'Fale em português brasileiro. Seja humano, breve, acolhedor e não gere culpa.' }));
       try {
         const providerResponse = await fetch('https://api.openai.com/v1/realtime/calls', { method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: form, signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS) });
         const answer = await providerResponse.text();
