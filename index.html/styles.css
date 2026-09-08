@@ -455,8 +455,9 @@ body { background-image: radial-gradient(circle at 14% 8%, rgba(215, 237, 119, .
 .drawer-item:hover { background: rgba(255,255,255,.08); }
 .drawer-item:active { transform: scale(.97); }
 .drawer-item.selected { background: rgba(217,239,131,.16); color: var(--lime); font-weight: 800; }
-.drawer-item-icon { display: grid; place-items: center; flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.08); }
-.drawer-item.selected .drawer-item-icon { background: rgba(217,239,131,.22); }
+.drawer-item-icon { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%; box-shadow: 0 3px 8px rgba(0,0,0,.18); }
+.drawer-item-icon .sport-icon { width: 18px; height: 18px; }
+.drawer-item.selected .drawer-item-icon { box-shadow: 0 0 0 3px var(--lime), 0 3px 8px rgba(0,0,0,.18); }
 .header-actions { gap: 8px; }
 .profile-avatar { display: grid; place-items: center; width: 38px; height: 38px; min-height: 38px; border: 1px solid rgba(46, 101, 73, .15); border-radius: 13px; background: var(--brand-dark); color: var(--lime); font-size: 14px; font-weight: 800; box-shadow: 0 7px 16px rgba(23, 57, 42, .15); }
 .profile-avatar:hover { transform: translateY(-1px); background: var(--brand); }

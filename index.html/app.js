@@ -512,12 +512,13 @@ function renderConnectionChat() {
   return `<section class="screen chat-wrap connection-chat-screen"><div class="chat-topline"><button class="icon-button" data-view="community" aria-label="Voltar">←</button><div class="companion-avatar">${escapeHtml(otherName[0] || '?')}</div><div><strong>${escapeHtml(otherName)}</strong><p class="small">${connection?.online ? 'online agora' : 'offline'}</p></div></div><div class="chat-messages">${messages.length ? messages.map(message => `<div class="bubble ${message.sender_id === data.userId ? 'user' : ''}">${escapeHtml(message.text)}</div>`).join('') : '<p class="small">Nenhuma mensagem ainda. Diga oi!</p>'}</div><form class="chat-form" id="connection-chat-form"><input class="text-input" id="connection-chat-input" placeholder="Escreva uma mensagem" autocomplete="off" /><button class="send" type="submit">➤</button></form></section>`;
 }
 function header(title, kicker = 'COMPANHEIRO') { const initial = String(data.profile.name || 'C').trim().charAt(0).toUpperCase(); return `<div class="topline app-header"><div class="header-lead"><button class="icon-button drawer-trigger" type="button" data-open-drawer aria-label="Abrir modalidades">${icon('menu')}</button><div class="header-copy"><div class="eyebrow">${kicker}</div><h2>${title}</h2><span class="header-date">${currentDateLabel()}</span></div></div><div class="header-actions"><span class="offline-badge">${navigator.onLine ? 'online' : 'offline pronto'}</span><button class="profile-avatar" aria-label="Abrir perfil" data-view="profile">${initial}</button></div></div>`; }
+const DRAWER_CATEGORY_COLORS = { endurance: '#f1b65c', strength: '#e2793f', flow: '#d6a6d5', combat: '#e9988b', team: '#9dce77', court: '#e5d36a', urban: '#b6b7ed', direct: '#9db8a0' };
 function groupedSportCatalog() {
   const groups = new Map();
   sportCatalog.forEach(sport => {
-    const tag = sportLayout(sport).tag;
-    if (!groups.has(tag)) groups.set(tag, []);
-    groups.get(tag).push(sport);
+    const { tag, slug } = sportLayout(sport);
+    if (!groups.has(tag)) groups.set(tag, { slug, sports: [] });
+    groups.get(tag).sports.push(sport);
   });
   return groups;
 }
@@ -525,7 +526,7 @@ function openSportDrawer() {
   const overlay = document.createElement('div');
   overlay.className = 'drawer-overlay';
   const groups = groupedSportCatalog();
-  const groupsHtml = [...groups.entries()].map(([tag, sports]) => `<div class="drawer-group"><span class="drawer-group-label">${escapeHtml(tag)}</span>${sports.map(sport => `<button type="button" class="drawer-item ${sport === data.profile.activity ? 'selected' : ''}" data-drawer-sport="${escapeHtml(sport)}"><span class="drawer-item-icon">${sportIcon(sport)}</span><span>${escapeHtml(sport)}</span></button>`).join('')}</div>`).join('');
+  const groupsHtml = [...groups.entries()].map(([tag, { slug, sports }]) => { const color = DRAWER_CATEGORY_COLORS[slug] || DRAWER_CATEGORY_COLORS.direct; return `<div class="drawer-group"><span class="drawer-group-label">${escapeHtml(tag)}</span>${sports.map(sport => `<button type="button" class="drawer-item ${sport === data.profile.activity ? 'selected' : ''}" data-drawer-sport="${escapeHtml(sport)}"><span class="drawer-item-icon" style="background:${color};color:#1a2e22">${sportIcon(sport)}</span><span>${escapeHtml(sport)}</span></button>`).join('')}</div>`; }).join('');
   overlay.innerHTML = `<nav class="drawer-panel"><div class="drawer-header"><div><span class="eyebrow" style="color:#b9d4bf">MODALIDADES</span><strong>Escolha seu esporte</strong></div><button class="icon-button" type="button" data-drawer-close aria-label="Fechar">×</button></div><div class="drawer-search"><input type="text" class="drawer-search-input" placeholder="Buscar modalidade..." data-drawer-search /></div><div class="drawer-list">${groupsHtml}</div></nav>`;
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('open'));
