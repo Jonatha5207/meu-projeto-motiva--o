@@ -9,6 +9,7 @@ import { registerSocialRoutes } from './social.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerVoiceRoutes } from './voice.js';
 import { registerCommunityRoutes } from './community.js';
+import { registerPlacesRoutes } from './places.js';
 
 // Cada handler assume a mesma responsabilidade do antigo bloco de `if` em server.js:
 // devolve `true` quando atendeu a rota, `false` para o roteador tentar o próximo.
@@ -27,6 +28,7 @@ export function createRouter(ctx) {
     registerAdminRoutes(ctx),
     registerVoiceRoutes(ctx),
     registerCommunityRoutes(ctx),
+    registerPlacesRoutes(ctx),
   ];
 
   return async function route(request, response) {
