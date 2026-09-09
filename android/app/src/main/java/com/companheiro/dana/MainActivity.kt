@@ -116,6 +116,8 @@ class MainActivity : ComponentActivity() {
             alwaysOnEnabled = enabled
         }
 
+        val scheduledCallNotifPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+
         fun openExactAlarmSettings() {
             val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName"))
             startActivity(intent)
@@ -127,6 +129,12 @@ class MainActivity : ComponentActivity() {
                 statusMessage = "Permite \"Alarmes e lembretes\" nas configurações pra Dana poder te chamar na hora certa."
                 openExactAlarmSettings()
                 return
+            }
+            // Sem essa permissao (Android 13+), a notificacao nativa que dispara junto
+            // com o alarme fica muda -- pede aqui, sem travar o resto se a pessoa negar.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                scheduledCallNotifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
             AlarmScheduler.scheduleNext(this@MainActivity, time)
             tokenStore.scheduledCallEnabled = true
