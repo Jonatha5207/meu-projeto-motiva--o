@@ -9,6 +9,15 @@ const PREP_TYPES = ['T_MINUS_60', 'T_MINUS_45', 'T_MINUS_30', 'T_MINUS_20'];
 const FINAL_STATES = ['COMPLETED', 'CANCELLED', 'RESCHEDULED', 'NOT_COMPLETED'];
 const STREAK_THRESHOLDS = [5, 10, 25, 50, 100];
 const RE_ENGAGEMENT_MS = 3 * 24 * 60 * 60 * 1000;
+const WEEKLY_GOAL_CHECK_WEEKDAYS = [4, 6]; // quinta e sabado (1=segunda .. 7=domingo)
+
+function mondayOf(date) {
+  const monday = new Date(date);
+  const weekday = monday.getDay() || 7;
+  monday.setDate(monday.getDate() - weekday + 1);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
 
 function scheduledFor(session, type, durationMinutes = 45) {
   const base = new Date(session.scheduled_at);
@@ -27,6 +36,7 @@ function notificationCopy(type, ctx = {}) {
     case 'DAILY_MOTIVATION': return { title: 'Companheiro', body: ctx.message || motivationalPhrases[Math.floor(Math.random() * motivationalPhrases.length)] };
     case 'STREAK_MILESTONE': return { title: 'Isso é constância', body: `Você completou ${ctx.count} treinos com o Companheiro. Isso não é sorte, é constância.` };
     case 'RE_ENGAGEMENT': return { title: 'Sem cobrança', body: 'Faz um tempo que a gente não se fala. Sem cobrança nenhuma — quer retomar quando fizer sentido para você?' };
+    case 'WEEKLY_GOAL_BEHIND': return { title: 'Vamos alcançar sua meta?', body: `Essa semana você já treinou ${ctx.completed} de ${ctx.goal} vezes. Ainda dá tempo de chegar lá!` };
     default: return { title: 'Companheiro', body: 'Estou aqui com você.' };
   }
 }
@@ -126,12 +136,40 @@ export function createNotificationService({ store, analyticsService, logger }) {
       }
     },
 
+    // Confere na quinta e no sabado se a pessoa esta abaixo do ritmo da meta
+    // semanal (profile.frequency) e avisa uma vez por semana, sem ficar cobrando
+    // todo dia.
+    async processWeeklyGoalCheck() {
+      const now = new Date();
+      const weekday = now.getDay() || 7;
+      if (!WEEKLY_GOAL_CHECK_WEEKDAYS.includes(weekday)) return;
+      const monday = mondayOf(now);
+      const weekKey = monday.toISOString().slice(0, 10);
+      for (const user of await store.listAllUsers()) {
+        const profile = await store.getProfile(user.id);
+        if (profile.notifications_enabled === false) continue;
+        const goal = Number(profile.frequency) || 0;
+        if (!goal) continue;
+        const state = await store.getNotificationState(user.id);
+        if (state.lastWeeklyGoalNudgeWeek === weekKey) continue;
+        const sessions = await store.listSessions(user.id);
+        const completedThisWeek = sessions.filter(item => item.status === 'COMPLETED' && new Date(item.scheduled_at) >= monday).length;
+        const expectedByNow = Math.ceil(goal * (weekday / 7));
+        if (completedThisWeek >= expectedByNow) continue;
+        await store.setNotificationState(user.id, { ...state, lastWeeklyGoalNudgeWeek: weekKey });
+        const copy = notificationCopy('WEEKLY_GOAL_BEHIND', { completed: completedThisWeek, goal });
+        await sendWebPushToUser(user.id, { title: copy.title, body: copy.body, key: 'WEEKLY_GOAL_BEHIND', tag: 'companheiro-weekly-goal' });
+        await analyticsService.record(user.id, 'WEEKLY_GOAL_NUDGE_SENT', { completed: completedThisWeek, goal });
+      }
+    },
+
     async runScheduler() {
       try {
         await this.processScheduledNotifications();
         await this.processDailyMotivation();
         await this.processStreakMilestones();
         await this.processReEngagement();
+        await this.processWeeklyGoalCheck();
         store.persist();
       } catch (error) {
         logger.error('notification_scheduler_failed', error);

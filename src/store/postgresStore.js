@@ -270,6 +270,10 @@ export function createPostgresStore({ connectionString, ssl = true, logger }) {
       const { rows } = await query('select count(*)::int as count from analytics_events where event_name = $1', [eventName]);
       return rows[0].count;
     },
+    async listRecentEventsForUser(userId, limit = 50) {
+      const { rows } = await query('select * from analytics_events where user_id = $1 order by created_at desc limit $2', [userId, limit]);
+      return rows;
+    },
 
     async listRecentPosts(limit = 50) {
       // O feed social não faz parte do schema.sql original (é uma extensão do MVP,

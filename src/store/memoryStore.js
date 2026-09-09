@@ -127,6 +127,9 @@ export function createMemoryStore({ dataDir }) {
 
     async recordEvent(event) { analyticsEvents.push(event); },
     async countEvents(eventName) { return analyticsEvents.filter(item => item.event_name === eventName).length; },
+    async listRecentEventsForUser(userId, limit = 50) {
+      return analyticsEvents.filter(item => item.user_id === userId).slice(-limit).reverse();
+    },
 
     async listRecentPosts(limit) { return socialPosts.slice(-limit).reverse(); },
     async createPost(post) { socialPosts.push(post); return post; },

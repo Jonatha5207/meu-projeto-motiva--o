@@ -12,6 +12,9 @@ export function createAnalyticsService({ store }) {
       if (!eventName) throw badRequest('invalid_event');
       await this.record(userId, eventName, input.metadata || {}, input.training_session_id || null);
     },
+    async recentEventsForUser(userId, limit = 50) {
+      return store.listRecentEventsForUser(userId, limit);
+    },
     async adminMetrics() {
       const allSessions = await store.listAllSessions();
       const opportunities = allSessions.filter(item => item.rescue_opportunity).length;

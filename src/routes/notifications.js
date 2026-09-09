@@ -31,6 +31,11 @@ export function registerNotificationRoutes({ json, readJsonBody, requireUser, se
       json(response, 201, { ok: true });
       return true;
     }
+    if (request.url?.startsWith('/api/events/mine') && request.method === 'GET') {
+      const user = await requireUser(request, response); if (!user) return true;
+      json(response, 200, await services.analytics.recentEventsForUser(user.id, 50));
+      return true;
+    }
     return false;
   };
 }
