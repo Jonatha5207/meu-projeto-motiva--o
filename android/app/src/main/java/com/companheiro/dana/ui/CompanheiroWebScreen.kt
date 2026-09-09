@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.companheiro.dana.ble.HeartRateMonitor
+import com.companheiro.dana.network.EventReporter
 import org.json.JSONObject
 
 private const val COMPANHEIRO_URL = "https://companheiro-app.onrender.com/"
@@ -114,12 +115,33 @@ fun CompanheiroWebScreen(
                         callback: GeolocationPermissions.Callback,
                     ) {
                         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                        EventReporter.report(authToken, "WEBVIEW_GEO_PROMPT", mapOf("granted" to granted, "origin" to origin))
                         callback.invoke(origin, granted, false)
+                    }
+
+                    // Sem log nenhum de console antes -- se a tela travar (fundo
+                    // escurecido preso) de novo, isso deixa registrado qualquer erro JS
+                    // que tiver acontecido no exato momento, em vez de so suspeitar.
+                    override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
+                        if (message.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR) {
+                            EventReporter.report(authToken, "WEBVIEW_JS_ERROR", mapOf(
+                                "message" to message.message(),
+                                "source" to message.sourceId(),
+                                "line" to message.lineNumber(),
+                            ))
+                        }
+                        return true
                     }
                 }
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                         return tryLaunchExternally(context, request.url.toString())
+                    }
+
+                    override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
+                        if (request.isForMainFrame) {
+                            EventReporter.report(authToken, "WEBVIEW_LOAD_ERROR", mapOf("description" to error.description?.toString(), "url" to request.url.toString()))
+                        }
                     }
 
                     override fun onPageFinished(view: WebView, url: String?) {
