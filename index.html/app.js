@@ -945,8 +945,17 @@ function initMap() {
 }
 function centerMap() { if (userMarker && mapInstance) mapInstance.setView(userMarker.getLatLng(), 16); else toast('Aguardando sua localização'); }
 let heartRateDevice = null;
+const nativeBluetoothSupported = Boolean(window.DanaNative?.hasNativeBluetooth?.());
+window.__danaNativeHeartRate = function (payload) {
+  data.devices = data.devices || {};
+  if (payload.connected === true) { data.devices.heartRateConnected = true; data.devices.heartRateName = payload.name || 'monitor cardíaco'; data.devices.heartRateBpm = null; toast(`Conectado a ${data.devices.heartRateName}`); }
+  else if (payload.connected === false) { data.devices.heartRateConnected = false; if (payload.error) toast('Não foi possível conectar ao monitor cardíaco'); else toast('Monitor cardíaco desconectado'); }
+  else if (typeof payload.bpm === 'number') { data.devices.heartRateBpm = payload.bpm; const valueLabel = document.querySelector('[data-heart-rate-value]'); if (valueLabel) valueLabel.textContent = `${payload.bpm} bpm`; const liveBadge = document.querySelector('[data-heart-rate-live]'); if (liveBadge) liveBadge.textContent = `${payload.bpm} bpm`; save(); return; }
+  save();
+  if (['profile', 'today'].includes(currentView)) render();
+};
 function renderHeartRateDeviceRow() {
-  const bluetoothSupported = Boolean(navigator.bluetooth);
+  const bluetoothSupported = Boolean(navigator.bluetooth) || nativeBluetoothSupported;
   const connected = Boolean(data.devices?.heartRateConnected);
   const status = connected
     ? `Conectado a ${escapeHtml(data.devices.heartRateName || 'monitor cardíaco')} · <strong data-heart-rate-value>${data.devices.heartRateBpm ? data.devices.heartRateBpm + ' bpm' : 'aguardando dado...'}</strong>`
@@ -959,6 +968,7 @@ function renderHeartRateDeviceRow() {
   return `<div class="device-row"><div class="device-icon" aria-hidden="true">⌚</div><div class="device-copy"><strong>Relógio / monitor cardíaco</strong><p class="small">${status}</p></div>${button}</div>`;
 }
 async function connectHeartRateMonitor() {
+  if (nativeBluetoothSupported) { window.DanaNative.connectHeartRate(); return; }
   if (!navigator.bluetooth) { toast('Bluetooth Web não é suportado neste navegador'); return; }
   try {
     const device = await navigator.bluetooth.requestDevice({ filters: [{ services: ['heart_rate'] }] });
@@ -1002,6 +1012,7 @@ function onHeartRateDisconnected() {
   if (['profile', 'today'].includes(currentView)) render();
 }
 function disconnectHeartRateMonitor() {
+  if (nativeBluetoothSupported) { window.DanaNative.disconnectHeartRate(); return; }
   if (heartRateDevice?.gatt?.connected) heartRateDevice.gatt.disconnect();
   data.devices = data.devices || {};
   data.devices.heartRateConnected = false;
