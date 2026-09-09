@@ -79,11 +79,20 @@ class MainActivity : ComponentActivity() {
         var isListening by remember { mutableStateOf(false) }
         var isThinking by remember { mutableStateOf(false) }
         var statusMessage by remember { mutableStateOf<String?>(null) }
-        var alwaysOnEnabled by remember { mutableStateOf(false) }
+        // Sem ler de tokenStore aqui, o interruptor sempre voltava pra "desligado"
+        // toda vez que a pessoa reabria o app -- mesmo com o servico ainda rodando
+        // de verdade em segundo plano (por isso a notificacao continuava na barra
+        // mas a tela mostrava desligado). Agora reflete o estado real salvo.
+        var alwaysOnEnabled by remember { mutableStateOf(tokenStore.alwaysOnEnabled) }
         var trainingTime by remember { mutableStateOf(tokenStore.trainingTime) }
         var scheduledCallEnabled by remember { mutableStateOf(tokenStore.scheduledCallEnabled) }
 
         val scope = rememberCoroutineScope()
+
+        fun setAlwaysOn(enabled: Boolean) {
+            tokenStore.alwaysOnEnabled = enabled
+            alwaysOnEnabled = enabled
+        }
 
         fun openExactAlarmSettings() {
             val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName"))
@@ -122,7 +131,7 @@ class MainActivity : ComponentActivity() {
 
         val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             startDanaService()
-            alwaysOnEnabled = true
+            setAlwaysOn(true)
         }
 
         val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -132,10 +141,10 @@ class MainActivity : ComponentActivity() {
             if (!granted) { statusMessage = "Preciso da permissão de microfone pra ficar ouvindo."; return@rememberLauncherForActivityResult }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val hasNotifPermission = ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                if (hasNotifPermission) { startDanaService(); alwaysOnEnabled = true }
+                if (hasNotifPermission) { startDanaService(); setAlwaysOn(true) }
                 else notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {
-                startDanaService(); alwaysOnEnabled = true
+                startDanaService(); setAlwaysOn(true)
             }
         }
 
@@ -202,6 +211,13 @@ class MainActivity : ComponentActivity() {
             var danaOpen by remember { mutableStateOf(false) } // false = mostra o site (que ja tem suas proprias abas), true = Dana em cima
             var webView by remember { mutableStateOf<WebView?>(null) }
 
+            // Garante que o servico realmente esteja rodando quando a pessoa volta
+            // pro app com "Ok Dana sempre ativo" ligado -- se ele tiver morrido por
+            // qualquer motivo (Android matou, celular reiniciou), isso religa sozinho
+            // em vez de deixar o interruptor mostrando "ligado" com nada rodando de
+            // verdade. startForegroundService e seguro de chamar de novo se ja tiver rodando.
+            LaunchedEffect(Unit) { if (tokenStore.alwaysOnEnabled) startDanaService() }
+
             BackHandler(enabled = danaOpen) { danaOpen = false }
             BackHandler(enabled = !danaOpen && webView?.canGoBack() == true) { webView?.goBack() }
 
@@ -259,13 +275,13 @@ class MainActivity : ComponentActivity() {
                                             ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                                             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                         } else {
-                                            startDanaService(); alwaysOnEnabled = true
+                                            startDanaService(); setAlwaysOn(true)
                                         }
                                     } else {
                                         alwaysOnMicLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                     }
                                 } else {
-                                    stopDanaService(); alwaysOnEnabled = false
+                                    stopDanaService(); setAlwaysOn(false)
                                 }
                             },
                             onPickTrainingTime = { showTimePicker(andEnable = false) },

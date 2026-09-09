@@ -40,6 +40,10 @@ class TokenStore(context: Context) {
         get() = prefs.getBoolean(KEY_SCHEDULED_CALL, false)
         set(value) = prefs.edit().putBoolean(KEY_SCHEDULED_CALL, value).apply()
 
+    var alwaysOnEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ALWAYS_ON, false)
+        set(value) = prefs.edit().putBoolean(KEY_ALWAYS_ON, value).apply()
+
     fun clear() = prefs.edit().clear().apply()
 
     companion object {
@@ -48,5 +52,6 @@ class TokenStore(context: Context) {
         private const val KEY_ACTIVITY = "user_activity"
         private const val KEY_TRAINING_TIME = "training_time"
         private const val KEY_SCHEDULED_CALL = "scheduled_call_enabled"
+        private const val KEY_ALWAYS_ON = "always_on_enabled"
     }
 }
