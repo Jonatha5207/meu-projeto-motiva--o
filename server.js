@@ -34,7 +34,11 @@ describeEnv(logger);
 const publicDir = join(root, 'index.html');
 const dataDir = join(root, '.data');
 const port = Number(process.env.PORT || 8000);
-const adminToken = process.env.ADMIN_TOKEN || 'dev-admin-token';
+// Sem valor padrao aqui de proposito: um fallback fixo (ex.: "dev-admin-token")
+// ficaria visivel pra qualquer um que olhasse o codigo-fonte do site, dando
+// acesso admin de graca em produção se ADMIN_TOKEN nunca fosse configurado.
+// Sem a variavel definida, os endpoints admin ficam bloqueados por padrao.
+const adminToken = process.env.ADMIN_TOKEN || null;
 
 const store = await createStore({ dataDir, root, logger });
 
@@ -65,6 +69,7 @@ const services = {
 };
 
 function isAdminAuthorized(request) {
+  if (!adminToken) return false;
   return timingSafeEqualStrings(request.headers['x-admin-token'], adminToken);
 }
 
