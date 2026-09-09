@@ -86,7 +86,6 @@ private fun tryLaunchExternally(context: Context, url: String): Boolean {
 fun CompanheiroWebScreen(
     authToken: String?,
     webViewRef: (WebView) -> Unit = {},
-    onNeedsLocationPermission: () -> Unit = {},
     onNeedsBluetoothPermission: () -> Unit = {},
 ) {
     AndroidView(
@@ -100,16 +99,22 @@ fun CompanheiroWebScreen(
                 addJavascriptInterface(DanaBluetoothBridge(context, this, onNeedsBluetoothPermission), "DanaNative")
                 // Sem isso o mapa do site nunca conseguia a localizacao: o WebView
                 // sempre nega o pedido de geolocalizacao do site se ninguem responder
-                // ao prompt. Aqui a gente confere se o app tem a permissao do Android
-                // e libera pro site (ou pede a permissao do sistema, se faltar).
+                // ao prompt. Aqui a gente so confere se o app ja tem a permissao do
+                // Android e libera pro site -- SEM tentar abrir o dialogo de permissao
+                // reativamente daqui de dentro. Fazer isso a partir do callback do
+                // WebView travou a tela (fundo escurecido preso, sem dialogo visivel,
+                // so resolvia fechando o app) -- provavelmente um problema de estado
+                // do ciclo de vida entre o WebView e o ActivityResultLauncher nesse
+                // WebView especifico. A permissao agora e pedida de forma proativa e
+                // controlada (ver LaunchedEffect em MainActivity), nao reativamente
+                // por aqui.
                 webChromeClient = object : WebChromeClient() {
                     override fun onGeolocationPermissionsShowPrompt(
                         origin: String,
                         callback: GeolocationPermissions.Callback,
                     ) {
                         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                        if (granted) callback.invoke(origin, true, false)
-                        else { onNeedsLocationPermission(); callback.invoke(origin, false, false) }
+                        callback.invoke(origin, granted, false)
                     }
                 }
                 webViewClient = object : WebViewClient() {

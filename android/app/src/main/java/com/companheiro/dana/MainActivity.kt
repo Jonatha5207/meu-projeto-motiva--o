@@ -248,6 +248,17 @@ class MainActivity : ComponentActivity() {
             // verdade. startForegroundService e seguro de chamar de novo se ja tiver rodando.
             LaunchedEffect(Unit) { if (tokenStore.alwaysOnEnabled) startDanaService() }
 
+            // Pede a permissao de localizacao aqui, de forma proativa e controlada,
+            // uma vez por sessao -- em vez de pedir reativamente de dentro do callback
+            // de geolocalizacao do WebView, que travava a tela em alguns aparelhos
+            // (fundo escurecido preso, sem dialogo visivel). So pede se ainda nao
+            // tiver a permissao.
+            LaunchedEffect(Unit) {
+                if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                }
+            }
+
             BackHandler(enabled = danaOpen) { danaOpen = false }
             BackHandler(enabled = !danaOpen && webView?.canGoBack() == true) { webView?.goBack() }
 
@@ -257,14 +268,9 @@ class MainActivity : ComponentActivity() {
                 CompanheiroWebScreen(
                     authToken = token,
                     webViewRef = { webView = it },
-                    // O pedido de permissao precisa ser disparado na thread principal.
-                    // O callback de geolocalizacao do WebView normalmente ja vem na UI
-                    // thread, mas em alguns WebViews (principalmente o da Samsung) isso
-                    // e inconsistente -- se cair fora da UI thread, o dialogo de permissao
-                    // as vezes so mostra o fundo escurecido sem os botoes, exatamente como
-                    // uma "tela branca sem opcao". runOnUiThread garante que sempre
-                    // funciona, sem custo se ja estiver na UI thread.
-                    onNeedsLocationPermission = { runOnUiThread { locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION) } },
+                    // Chamado de dentro de um @JavascriptInterface, que o Android sempre
+                    // invoca numa thread de fundo -- runOnUiThread aqui e necessario de
+                    // verdade (diferente do pedido de localizacao, que agora e proativo).
                     onNeedsBluetoothPermission = {
                         runOnUiThread {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
