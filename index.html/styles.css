@@ -477,13 +477,17 @@ body { background-image: radial-gradient(circle at 14% 8%, rgba(215, 237, 119, .
 .drawer-list { flex: 1; overflow-y: auto; padding: 4px 10px 24px; }
 .drawer-group { margin-bottom: 6px; }
 .drawer-group-label { display: block; margin: 14px 12px 4px; color: rgba(255,255,255,.42); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.drawer-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 8px 10px; border-radius: 14px; background: transparent; color: rgba(255,255,255,.85); font-size: 14px; font-weight: 600; text-align: left; transition: transform .12s ease, background .15s ease; }
+.drawer-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 8px 10px; border-radius: 14px; background: transparent; color: rgba(255,255,255,.85); font-size: 14px; font-weight: 600; text-align: left; transition: transform .18s cubic-bezier(.34, 1.56, .64, 1), background .15s ease; }
 .drawer-item:hover { background: rgba(255,255,255,.08); }
-.drawer-item:active { transform: scale(.97); }
+.drawer-item:active { transform: scale(.94) rotate(-1deg); }
 .drawer-item.selected { background: rgba(217,239,131,.16); color: var(--lime); font-weight: 800; }
-.drawer-item-icon { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%; box-shadow: 0 3px 8px rgba(0,0,0,.18); }
-.drawer-item-icon .sport-icon { width: 18px; height: 18px; }
-.drawer-item.selected .drawer-item-icon { box-shadow: 0 0 0 3px var(--lime), 0 3px 8px rgba(0,0,0,.18); }
+.drawer-item-icon { position: relative; display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%; box-shadow: 0 3px 8px rgba(0,0,0,.18), inset 0 2px 3px rgba(255,255,255,.35), inset 0 -3px 4px rgba(0,0,0,.2); overflow: hidden; transition: transform .18s cubic-bezier(.34, 1.56, .64, 1); }
+.drawer-item:active .drawer-item-icon { transform: scale(1.12) rotate(4deg); }
+.drawer-item-icon::after { content: ''; position: absolute; inset: 0; background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.55) 48%, transparent 66%); background-size: 220% 220%; background-position: 130% 130%; transition: background-position .5s ease; }
+.drawer-item:hover .drawer-item-icon::after { background-position: -30% -30%; }
+.drawer-item-icon .sport-icon { width: 18px; height: 18px; position: relative; z-index: 1; }
+.drawer-item.selected .drawer-item-icon { box-shadow: 0 0 0 3px var(--lime), 0 3px 10px rgba(217,239,131,.55), inset 0 2px 3px rgba(255,255,255,.35); animation: drawer-icon-live 2.2s ease-in-out infinite; }
+@keyframes drawer-icon-live { 0%, 100% { box-shadow: 0 0 0 3px var(--lime), 0 3px 10px rgba(217,239,131,.4), inset 0 2px 3px rgba(255,255,255,.35); } 50% { box-shadow: 0 0 0 3px var(--lime), 0 3px 16px rgba(217,239,131,.85), inset 0 2px 3px rgba(255,255,255,.35); } }
 .header-actions { gap: 8px; }
 .profile-avatar { display: grid; place-items: center; width: 38px; height: 38px; min-height: 38px; border: 1px solid rgba(46, 101, 73, .15); border-radius: 13px; background: var(--brand-dark); color: var(--lime); font-size: 14px; font-weight: 800; box-shadow: 0 7px 16px rgba(23, 57, 42, .15); }
 .profile-avatar:hover { transform: translateY(-1px); background: var(--brand); }
