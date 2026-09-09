@@ -406,7 +406,25 @@ async function enableNotifications() {
   toast('Notificações ativadas');
 }
 
+function reportRenderError(view, error) {
+  try { apiRequest('/api/events', { method: 'POST', body: JSON.stringify({ event_name: 'WEB_RENDER_ERROR', metadata: { view, message: String(error?.message || error), stack: String(error?.stack || '').slice(0, 500) } }) }).catch(() => {}); } catch { /* Sem conexao: segue sem reportar. */ }
+}
 function render() {
+  try {
+    renderInner();
+  } catch (error) {
+    // Sem essa rede de seguranca, um erro em qualquer tela (por exemplo um
+    // dado que ainda nao carregou) trava a troca de tela silenciosamente --
+    // a pessoa toca e "nao acontece nada", porque o innerHTML nunca chega a
+    // ser atualizado. Agora a gente registra o erro (pra investigar de
+    // verdade depois) e volta pra Home em vez de deixar a tela presa.
+    console.error('Erro ao renderizar', currentView, error);
+    reportRenderError(currentView, error);
+    if (currentView !== 'home') { currentView = 'home'; render(); }
+    else toast('Algo deu errado. Tente novamente em alguns segundos.');
+  }
+}
+function renderInner() {
   applyCustomization();
   connectSocialRealtime();
   if (data.profile.notificationsEnabled) scheduleTrainingNotifications(); else clearNotificationTimers();
@@ -846,9 +864,13 @@ function initMeetingMap() {
       const meters = distanceBetween(myLiveCoordinates, peerCoordinates);
       const distanceLabel = meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
       const etaMinutes = Math.max(1, Math.round(meters / 1.4 / 60));
-      L.polyline([myLiveCoordinates, peerCoordinates], { color: '#366b4e', weight: 2, dashArray: '6 8', opacity: .65 }).addTo(mapInstance);
+      const line = L.polyline([myLiveCoordinates, peerCoordinates], { color: '#366b4e', weight: 2, dashArray: '6 8', opacity: .65 }).addTo(mapInstance);
       const midpoint = [(myLiveCoordinates[0] + peerCoordinates[0]) / 2, (myLiveCoordinates[1] + peerCoordinates[1]) / 2];
-      L.marker(midpoint, { icon: L.divIcon({ className: 'live-distance-label', html: `${distanceLabel} · ~${etaMinutes} min a pé`, iconSize: [0, 0] }), interactive: false }).addTo(mapInstance);
+      const label = L.marker(midpoint, { icon: L.divIcon({ className: 'live-distance-label', html: `${distanceLabel} · ~${etaMinutes} min a pé`, iconSize: [0, 0] }), interactive: false }).addTo(mapInstance);
+      // Linha reta e so o palpite inicial (instantaneo) -- tenta trocar pelo
+      // caminho real de rua (igual 99/Uber) assim que o servico de rotas
+      // responder. Se falhar ou demorar, a linha reta continua valendo.
+      upgradeRouteToRealPath(mapInstance, myLiveCoordinates, peerCoordinates, line, label, distanceLabel);
     });
   }
   pickupEvents.filter(event => Number.isFinite(event.lat) && Number.isFinite(event.lng)).forEach(event => {
@@ -858,6 +880,20 @@ function initMeetingMap() {
       .bindPopup(`<strong>${escapeHtml(event.title)}</strong><br>${escapeHtml(event.location_name)}<br>${new Date(event.scheduled_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`);
   });
   if (bounds.length) mapInstance.fitBounds(bounds, { padding: [24, 24] });
+}
+async function upgradeRouteToRealPath(mapAtCallTime, from, to, straightLine, label, distanceLabel) {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/foot/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`;
+    const response = await fetch(url);
+    const result = await response.json();
+    const route = result?.routes?.[0];
+    if (!route || mapInstance !== mapAtCallTime) return;
+    const path = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+    straightLine.setLatLngs(path);
+    straightLine.setStyle({ dashArray: null, weight: 3, opacity: .85 });
+    const etaMinutes = Math.max(1, Math.round(route.duration / 60));
+    label.setIcon(L.divIcon({ className: 'live-distance-label', html: `${distanceLabel} · ~${etaMinutes} min a pé`, iconSize: [0, 0] }));
+  } catch { /* Sem rota real agora -- a linha reta e a estimativa continuam valendo. */ }
 }
 let liveLocationSharing = false;
 let liveLocationPeers = [];
@@ -1438,6 +1474,13 @@ function renderModalityPanel(activity = data.profile.activity, context = 'today'
   const contextCopy = { today: 'Use este foco como guia do proximo treino.', routine: 'A rotina ganha clareza quando o layout reflete a modalidade.', customize: 'Este sera o tom visual do seu app.' }[context] || 'O layout se adapta ao seu esporte.';
   return `<div class="card modality-panel modality-${layout.slug}"><div class="modality-panel-head"><div><span class="eyebrow">${layout.tag}</span><h3>${escapeHtml(layout.title)}</h3></div><span class="status-pill">${escapeHtml(activity)}</span></div><p class="small">${escapeHtml(layout.summary)}</p><div class="modality-grid">${layout.focus.map(item => `<span class="modality-chip">${escapeHtml(item)}</span>`).join('')}</div><div class="modality-metrics">${layout.metrics.map(metric => `<div><span class="small">${escapeHtml(metric.label)}</span><strong>${escapeHtml(metric.value)}</strong></div>`).join('')}</div><p class="modality-note">${escapeHtml(contextCopy)} ${escapeHtml(layout.note)}</p></div>`;
 }
+// Ultima rede de seguranca: um erro que escape de qualquer handler (fora do
+// render()) antes so travava a tela sem nenhum aviso. Agora pelo menos fica
+// registrado pra investigar depois, em vez de a pessoa achar que o app so
+// "nao fez nada".
+window.addEventListener('error', event => reportRenderError(currentView, event.error || event.message));
+window.addEventListener('unhandledrejection', event => reportRenderError(currentView, event.reason));
+
 render();
 loadGoogleClientId();
 
