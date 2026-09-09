@@ -90,6 +90,20 @@ export function registerCommunityRoutes({ json, readJsonBody, requireUser, servi
       json(response, 204, {});
       return true;
     }
+    if (request.url?.match(/^\/api\/pickup-events\/[^/]+\/messages$/) && request.method === 'GET') {
+      const user = await requireUser(request, response); if (!user) return true;
+      const id = request.url.split('/')[3];
+      json(response, 200, await services.community.listPickupEventMessages(user.id, id));
+      return true;
+    }
+    if (request.url?.match(/^\/api\/pickup-events\/[^/]+\/messages$/) && request.method === 'POST') {
+      const user = await requireUser(request, response); if (!user) return true;
+      const id = request.url.split('/')[3];
+      const input = await readJsonBody(request);
+      const message = await services.community.sendPickupEventMessage(user.id, id, input);
+      json(response, 201, message);
+      return true;
+    }
     return false;
   };
 }

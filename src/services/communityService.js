@@ -209,5 +209,43 @@ export function createCommunityService({ store, notificationService }) {
       await store.deletePickupEvent(eventId);
       broadcastRealtime('pickup-event-cancelled', { id: eventId, activity: event.activity });
     },
+
+    async listPickupEventMessages(userId, eventId) {
+      const event = await requirePickupEventAccess(store, userId, eventId);
+      const messages = await store.listPickupEventMessages(event.id);
+      return decoratePickupEventMessages(store, messages);
+    },
+
+    async sendPickupEventMessage(userId, eventId, input) {
+      const event = await requirePickupEventAccess(store, userId, eventId);
+      const text = cleanText(input.text, 1000);
+      if (!text) throw badRequest('invalid_message');
+      const message = { id: randomUUID(), event_id: event.id, sender_id: userId, text, created_at: new Date().toISOString() };
+      await store.createPickupEventMessage(message);
+      const sender = await store.getUserById(userId);
+      const participants = await store.listPickupEventParticipants(event.id);
+      const recipientIds = new Set([event.creator_id, ...participants.map(item => item.user_id)]);
+      recipientIds.delete(userId);
+      recipientIds.forEach(id => sendToUser(id, 'pickup-event-message', { ...message, sender: { id: sender.id, name: sender.name } }));
+      return { ...message, sender: { id: sender.id, name: sender.name } };
+    },
   };
+}
+
+// Chat do evento e restrito a quem confirmou presenca (criador ou participante)
+// -- nao e um chat publico, e o grupo pra combinar os detalhes do encontro.
+async function requirePickupEventAccess(store, userId, eventId) {
+  const event = await store.getPickupEvent(eventId);
+  if (!event) throw notFound('pickup_event_not_found');
+  if (event.creator_id === userId) return event;
+  const participants = await store.listPickupEventParticipants(eventId);
+  if (!participants.some(item => item.user_id === userId)) throw new AppError(403, 'not_event_participant');
+  return event;
+}
+
+async function decoratePickupEventMessages(store, messages) {
+  const senderIds = [...new Set(messages.map(message => message.sender_id))];
+  const senders = await Promise.all(senderIds.map(id => store.getUserById(id)));
+  const sendersById = new Map(senders.filter(Boolean).map(user => [user.id, user]));
+  return messages.map(message => ({ ...message, sender: sendersById.has(message.sender_id) ? { id: message.sender_id, name: sendersById.get(message.sender_id).name } : null }));
 }

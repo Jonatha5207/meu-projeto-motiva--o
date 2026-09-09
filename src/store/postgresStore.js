@@ -387,6 +387,17 @@ export function createPostgresStore({ connectionString, ssl = true, logger }) {
       const { rows } = await query('select * from pickup_event_participants where event_id = $1', [eventId]);
       return rows;
     },
+    async listPickupEventMessages(eventId) {
+      const { rows } = await query('select * from pickup_event_messages where event_id = $1 order by created_at asc', [eventId]);
+      return rows;
+    },
+    async createPickupEventMessage(message) {
+      await query(
+        'insert into pickup_event_messages (id, event_id, sender_id, text, created_at) values ($1, $2, $3, $4, $5)',
+        [message.id, message.event_id, message.sender_id, message.text, message.created_at],
+      );
+      return message;
+    },
 
     async load() { /* Postgres não precisa de carga manual: os dados já vivem no banco. */ },
     persist() { /* Cada método já grava direto no banco; não há snapshot a salvar. */ },

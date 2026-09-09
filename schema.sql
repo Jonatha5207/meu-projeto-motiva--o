@@ -212,6 +212,16 @@ create table if not exists pickup_event_participants (
   joined_at timestamptz not null default now(),
   primary key (event_id, user_id)
 );
+-- Chat do jogo/encontro: so quem confirmou presenca (participante ou criador)
+-- ve e manda mensagem aqui -- e o grupo de combinar os detalhes do encontro.
+create table if not exists pickup_event_messages (
+  id uuid primary key default uuid_generate_v4(),
+  event_id uuid not null references pickup_events(id) on delete cascade,
+  sender_id uuid not null references users(id) on delete cascade,
+  text text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_pickup_event_messages_event on pickup_event_messages(event_id, created_at);
 create index if not exists idx_sessions_user_date on training_sessions(user_id, scheduled_at);
 create index if not exists idx_schedules_user_weekday on training_schedules(user_id, weekday, scheduled_time);
 create index if not exists idx_events_name on analytics_events(event_name, created_at);

@@ -42,6 +42,7 @@ export function createMemoryStore({ dataDir }) {
   const liveLocations = new Map(); // userId -> { user_id, lat, lng, activity, started_at, expires_at }
   const pickupEvents = new Map(); // eventId -> event
   const pickupEventParticipants = new Map(); // eventId -> Set(userId)
+  const pickupEventMessages = new Map(); // eventId -> message[]
 
   function sessionsFor(userId) { if (!userSessions.has(userId)) userSessions.set(userId, []); return userSessions.get(userId); }
   function conversationsFor(userId) { if (!conversations.has(userId)) conversations.set(userId, []); return conversations.get(userId); }
@@ -173,6 +174,8 @@ export function createMemoryStore({ dataDir }) {
     async leavePickupEvent(eventId, userId) { pickupEventParticipants.get(eventId)?.delete(userId); },
     async deletePickupEvent(eventId) { pickupEvents.delete(eventId); pickupEventParticipants.delete(eventId); },
     async listPickupEventParticipants(eventId) { return [...(pickupEventParticipants.get(eventId) || [])].map(userId => ({ event_id: eventId, user_id: userId })); },
+    async listPickupEventMessages(eventId) { return pickupEventMessages.get(eventId) || []; },
+    async createPickupEventMessage(message) { if (!pickupEventMessages.has(message.event_id)) pickupEventMessages.set(message.event_id, []); pickupEventMessages.get(message.event_id).push(message); return message; },
 
     async load() {
       try {
