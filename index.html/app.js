@@ -1220,7 +1220,7 @@ function renderChatV2() {
 }
 
 function renderProfileV4() {
-  const actions = '<button class="secondary customize-entry" data-view="customize">Personalizar esporte e layout</button><button class="secondary install-entry" data-install-app>Instalar app neste aparelho</button><button class="secondary admin-entry" data-view="admin">Painel de desenvolvimento</button><button class="danger-action" data-delete-account>Excluir meus dados e conta</button>';
+  const actions = '<button class="secondary customize-entry" data-view="customize">Personalizar esporte e layout</button><button class="secondary install-entry" data-install-app>Instalar app neste aparelho</button><button class="secondary admin-entry" data-view="admin">Painel de desenvolvimento</button><a class="text-action" href="/privacidade.html" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:10px">Política de privacidade</a><button class="danger-action" data-delete-account>Excluir meus dados e conta</button>';
   return renderProfile().replace('</section>', `${actions}</section>`);
 }
 
