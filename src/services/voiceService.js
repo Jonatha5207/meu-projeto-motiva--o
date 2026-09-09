@@ -2,7 +2,7 @@ import { cleanText } from '../lib/http.js';
 import { AppError, badRequest } from '../lib/errors.js';
 import { OPENAI_TIMEOUT_MS } from './aiService.js';
 
-export const TTS_VOICES = ['coral', 'alloy', 'onyx', 'nova', 'shimmer', 'echo', 'fable'];
+export const TTS_VOICES = ['coral', 'alloy', 'onyx', 'nova', 'shimmer', 'echo', 'fable', 'ash', 'sage', 'verse', 'ballad'];
 
 export function createVoiceService() {
   return {

@@ -5,7 +5,7 @@ const AI_ENDPOINT = window.COMPANHEIRO_CONFIG?.aiEndpoint || (API_ORIGIN ? `${AP
 const HUMAN_AUDIO_ENDPOINT = window.COMPANHEIRO_CONFIG?.audioEndpoint || (API_ORIGIN ? `${API_ORIGIN}/api/motivation-audio` : '');
 const AUTH_TOKEN_KEY = 'companheiro-auth-token';
 const GUILT_PHRASES = ['você está falhando', 'você está decepcionando', 'você é preguiçoso', 'você é preguiçosa', 'tenha vergonha', 'todo mundo está treinando', 'você nunca vai conseguir'];
-const TTS_VOICE_LABELS = [['coral', 'Coral (calorosa)'], ['nova', 'Nova (energética)'], ['shimmer', 'Shimmer (suave)'], ['alloy', 'Alloy (neutra)'], ['onyx', 'Onyx (grave)'], ['echo', 'Echo (masculina)'], ['fable', 'Fable (narrativa)']];
+const TTS_VOICE_LABELS = [['coral', 'Coral (calorosa)'], ['nova', 'Nova (energética)'], ['shimmer', 'Shimmer (suave)'], ['alloy', 'Alloy (neutra)'], ['onyx', 'Onyx (grave)'], ['echo', 'Echo (masculina)'], ['fable', 'Fable (narrativa)'], ['ash', 'Ash (grave e direta)'], ['sage', 'Sage (serena)'], ['verse', 'Verse (expressiva)'], ['ballad', 'Ballad (suave e lenta)']];
 const weekDays = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'];
 const motivationalPhrases = [
   'Você não precisa sentir vontade. Só precisa dar o próximo passo.',
