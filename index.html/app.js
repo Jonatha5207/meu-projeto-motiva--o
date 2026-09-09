@@ -840,6 +840,21 @@ function initMeetingMap() {
       .addTo(mapInstance)
       .bindPopup(`<strong>${escapeHtml(peer.name || 'Alguém')}</strong><br>${escapeHtml(peer.activity || '')} · ao vivo agora`);
   });
+  if (myLiveCoordinates) {
+    bounds.push(myLiveCoordinates);
+    L.marker(myLiveCoordinates, { icon: L.divIcon({ className: 'my-live-pin', html: '<span class="my-live-pin-dot"></span><span class="my-live-pin-pulse"></span>', iconSize: [22, 22] }), zIndexOffset: 500 })
+      .addTo(mapInstance)
+      .bindPopup('Você está aqui agora');
+    liveLocationPeers.forEach(peer => {
+      const peerCoordinates = [peer.lat, peer.lng];
+      const meters = distanceBetween(myLiveCoordinates, peerCoordinates);
+      const distanceLabel = meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
+      const etaMinutes = Math.max(1, Math.round(meters / 1.4 / 60));
+      L.polyline([myLiveCoordinates, peerCoordinates], { color: '#366b4e', weight: 2, dashArray: '6 8', opacity: .65 }).addTo(mapInstance);
+      const midpoint = [(myLiveCoordinates[0] + peerCoordinates[0]) / 2, (myLiveCoordinates[1] + peerCoordinates[1]) / 2];
+      L.marker(midpoint, { icon: L.divIcon({ className: 'live-distance-label', html: `${distanceLabel} · ~${etaMinutes} min a pé`, iconSize: [0, 0] }), interactive: false }).addTo(mapInstance);
+    });
+  }
   pickupEvents.filter(event => Number.isFinite(event.lat) && Number.isFinite(event.lng)).forEach(event => {
     const coordinates = [event.lat, event.lng];
     bounds.push(coordinates);
@@ -856,22 +871,51 @@ async function loadLiveLocationPeers() {
   try { liveLocationPeers = (await apiRequest('/api/live-location')) || []; } catch { /* Mantém a última lista carregada. */ }
   if (currentView === 'map') render();
 }
+let myLiveCoordinates = null;
+let liveLocationWatcherId = null;
+let lastLiveLocationSentAt = 0;
+let lastLiveLocationSentCoords = null;
+let lastMapRenderFromWatcherAt = 0;
+
+function stopLiveLocationWatcher() {
+  if (liveLocationWatcherId !== null) { navigator.geolocation.clearWatch(liveLocationWatcherId); liveLocationWatcherId = null; }
+}
+
+async function sendLiveLocationUpdate(position, force) {
+  const coordinates = [position.coords.latitude, position.coords.longitude];
+  myLiveCoordinates = coordinates;
+  const now = Date.now();
+  const movedEnough = !lastLiveLocationSentCoords || distanceBetween(lastLiveLocationSentCoords, coordinates) > 25;
+  if (force || movedEnough || now - lastLiveLocationSentAt > 20000) {
+    lastLiveLocationSentAt = now;
+    lastLiveLocationSentCoords = coordinates;
+    try { await apiRequest('/api/live-location', { method: 'POST', body: JSON.stringify({ lat: coordinates[0], lng: coordinates[1], activity: data.profile.activity }) }); } catch { /* Mantem a ultima posicao conhecida, tenta de novo na proxima atualizacao. */ }
+  }
+  if (currentView === 'map' && now - lastMapRenderFromWatcherAt > 4000) { lastMapRenderFromWatcherAt = now; render(); }
+}
+
+function startLiveLocationWatcher() {
+  stopLiveLocationWatcher();
+  liveLocationWatcherId = navigator.geolocation.watchPosition(position => sendLiveLocationUpdate(position, false), () => {}, { enableHighAccuracy: true, maximumAge: 15000 });
+}
+
 async function toggleLiveLocationSharing() {
   if (liveLocationSharing) {
+    stopLiveLocationWatcher();
     try { await apiRequest('/api/live-location', { method: 'DELETE' }); } catch { /* Segue offline. */ }
     liveLocationSharing = false;
+    myLiveCoordinates = null;
     toast('Localização desativada');
     render();
     return;
   }
   if (!navigator.geolocation) { toast('Localização não suportada neste aparelho'); return; }
   navigator.geolocation.getCurrentPosition(async position => {
-    try {
-      await apiRequest('/api/live-location', { method: 'POST', body: JSON.stringify({ lat: position.coords.latitude, lng: position.coords.longitude, activity: data.profile.activity }) });
-      liveLocationSharing = true;
-      toast('Localização ativada por até 2 horas');
-      render();
-    } catch { toast('Não foi possível ativar agora. Verifique sua conexão.'); }
+    await sendLiveLocationUpdate(position, true);
+    liveLocationSharing = true;
+    startLiveLocationWatcher();
+    toast('Localização ativada por até 2 horas -- atualiza sozinha enquanto você se move');
+    render();
   }, () => toast('Permissão de localização negada'), { enableHighAccuracy: true, timeout: 10000 });
 }
 function fitMeetingMap() { if (mapInstance && currentView === 'map') initMeetingMap(); else toast('Abra o mapa de encontros primeiro'); }
