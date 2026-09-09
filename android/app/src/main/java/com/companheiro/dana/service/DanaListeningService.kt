@@ -106,11 +106,23 @@ class DanaListeningService : Service() {
                 val heard = speechToText.listenOnce().lowercase()
                 consecutiveSilence = 0
                 if (!active) {
-                    if (containsAny(heard, WAKE_PHRASES)) {
+                    val wakeMatch = WAKE_PHRASES.firstNotNullOfOrNull { phrase -> heard.indexOf(phrase).takeIf { it >= 0 }?.let { it to phrase } }
+                    if (wakeMatch != null) {
                         active = true
                         EventReporter.report(tokenStore.token, "DANA_WAKE_DETECTED")
-                        playTone(ToneGenerator.TONE_PROP_BEEP)
-                        updateNotification("Conversando com você...")
+                        val (index, phrase) = wakeMatch
+                        // Se a pessoa falar "Dana" e a pergunta junto, numa unica
+                        // frase (ex.: "Dana, como foi meu treino?"), o resto depois
+                        // da palavra de ativacao ia se perder -- a gente so marcava
+                        // "ativo" e esperava a PROXIMA fala, que nunca vinha porque
+                        // ela ja tinha falado tudo. Agora processa esse resto direto.
+                        val remainder = heard.substring(index + phrase.length).trim(' ', ',', '.', '!', '?')
+                        if (remainder.length >= 3) {
+                            handleMessage(remainder)
+                        } else {
+                            playTone(ToneGenerator.TONE_PROP_BEEP)
+                            updateNotification("Conversando com você...")
+                        }
                     }
                 } else if (containsAny(heard, END_PHRASES)) {
                     active = false
