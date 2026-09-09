@@ -1,10 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#171b22"/>
+      <stop offset="100%" stop-color="#0a0c10"/>
+    </linearGradient>
+    <linearGradient id="arc" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#e8720c"/>
+      <stop offset="50%" stop-color="#ffe9b0"/>
+      <stop offset="100%" stop-color="#e8720c"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0.2" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#ffb35c"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0.3" y1="0" x2="0.8" y2="1">
       <stop offset="0%" stop-color="#ffd76a"/>
       <stop offset="100%" stop-color="#e8720c"/>
     </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="32" fill="#161a16"/>
-  <path d="M64 32c-8 9-17 15-26 17-4 12 2 23 11 31 6 5 11 9 15 15 4-6 9-10 15-15 9-8 15-19 11-31-9-2-18-8-26-17Z" fill="url(#g)"/>
+  <rect width="128" height="128" rx="30" fill="url(#bg)"/>
+
+  <g stroke="url(#arc)" stroke-width="2.4" stroke-linecap="round" opacity="0.95">
+    <line x1="64" y1="18" x2="64" y2="4"/>
+    <line x1="52" y1="20" x2="46" y2="8"/>
+    <line x1="76" y1="20" x2="82" y2="8"/>
+    <line x1="42" y1="26" x2="33" y2="17"/>
+    <line x1="86" y1="26" x2="95" y2="17"/>
+  </g>
+
+  <path d="M26,60 A38,38 0 0 1 102,60" fill="none" stroke="url(#arc)" stroke-width="7" stroke-linecap="round"/>
+
+  <path d="M36,64 C34,56 38,49 46,48 C54,47 60,53 59,61 C59,64 58,66 62,68 C67,70 68,74 66,80 C62,90 66,102 64,114 C63,118 60,118 58,114 C52,104 44,94 38,86 C30,78 26,70 26,64 C26,58 30,54 36,64 Z" fill="url(#left)"/>
+  <circle cx="44" cy="49" r="14" fill="url(#left)"/>
+
+  <path d="M92,64 C94,56 90,49 82,48 C74,47 68,53 69,61 C69,64 70,66 66,68 C61,70 60,74 62,80 C66,90 62,102 64,114 C65,118 68,118 70,114 C76,104 84,94 90,86 C98,78 102,70 102,64 C102,58 98,54 92,64 Z" fill="url(#right)"/>
+  <circle cx="84" cy="49" r="14" fill="url(#right)"/>
 </svg>
