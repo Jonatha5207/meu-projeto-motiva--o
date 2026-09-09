@@ -15,7 +15,7 @@ export function createVoiceService() {
         const providerResponse = await fetch('https://api.openai.com/v1/audio/speech', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-          body: JSON.stringify({ model: process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts', voice: requestedVoice, input: text, instructions: 'Fale em português brasileiro, com tom humano, acolhedor, calmo e breve.', response_format: 'mp3' }),
+          body: JSON.stringify({ model: process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts', voice: requestedVoice, input: text, instructions: 'Fale no mesmo idioma do texto, com tom humano, acolhedor, calmo e breve.', response_format: 'mp3' }),
           signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
         });
         if (!providerResponse.ok) throw new AppError(502, 'tts_provider_unavailable');
