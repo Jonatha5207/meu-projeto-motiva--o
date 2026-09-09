@@ -249,12 +249,21 @@ class MainActivity : ComponentActivity() {
                 CompanheiroWebScreen(
                     authToken = token,
                     webViewRef = { webView = it },
-                    onNeedsLocationPermission = { locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
+                    // O pedido de permissao precisa ser disparado na thread principal.
+                    // O callback de geolocalizacao do WebView normalmente ja vem na UI
+                    // thread, mas em alguns WebViews (principalmente o da Samsung) isso
+                    // e inconsistente -- se cair fora da UI thread, o dialogo de permissao
+                    // as vezes so mostra o fundo escurecido sem os botoes, exatamente como
+                    // uma "tela branca sem opcao". runOnUiThread garante que sempre
+                    // funciona, sem custo se ja estiver na UI thread.
+                    onNeedsLocationPermission = { runOnUiThread { locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION) } },
                     onNeedsBluetoothPermission = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            bluetoothPermissionLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT))
-                        } else {
-                            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                        runOnUiThread {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                bluetoothPermissionLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT))
+                            } else {
+                                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
                         }
                     },
                 )
