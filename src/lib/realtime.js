@@ -1,5 +1,17 @@
 const clients = new Set();
 const clientsByUser = new Map(); // userId -> Set<response>
+const lastActiveByUser = new Map(); // userId -> timestamp da ultima chamada autenticada
+const ONLINE_WINDOW_MS = 3 * 60 * 1000;
+
+// A conexao SSE sozinha e um sinal de "online" fragil demais: no celular, ela
+// costuma cair assim que a tela apaga ou o app vai pra segundo plano, fazendo
+// a pessoa parecer offline quase na hora mesmo estando com o app aberto.
+// Por isso qualquer chamada autenticada (perfil, chat, comunidade etc.) tambem
+// conta como "ainda por aqui" por uns minutos, igual "visto por ultimo" de
+// outros apps.
+export function touchActive(userId) {
+  if (userId) lastActiveByUser.set(userId, Date.now());
+}
 
 export function registerRealtimeClient(response, userId = null) {
   clients.add(response);
@@ -34,5 +46,7 @@ export function sendToUser(userId, type, payload = {}) {
 }
 
 export function isUserOnline(userId) {
-  return clientsByUser.has(userId);
+  if (clientsByUser.has(userId)) return true;
+  const lastActive = lastActiveByUser.get(userId);
+  return Boolean(lastActive) && Date.now() - lastActive < ONLINE_WINDOW_MS;
 }

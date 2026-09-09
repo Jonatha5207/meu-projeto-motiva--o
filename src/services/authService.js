@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { hashPassword, verifyPassword } from '../lib/crypto.js';
 import { cleanText } from '../lib/http.js';
 import { AppError, badRequest, unauthorized } from '../lib/errors.js';
+import { touchActive } from '../lib/realtime.js';
 
 export function createAuthService({ store, analyticsService }) {
   return {
@@ -66,6 +67,7 @@ export function createAuthService({ store, analyticsService }) {
       if (!token) return null;
       const userId = await store.getUserIdByToken(token);
       if (!userId) return null;
+      touchActive(userId);
       return store.getUserById(userId);
     },
 
