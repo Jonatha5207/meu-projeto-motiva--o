@@ -1294,7 +1294,7 @@ function openLocationPickerModal() {
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `<div class="location-picker-sheet" role="dialog" aria-modal="true" aria-label="Escolher local no mapa"><div class="location-picker-head"><h3>Escolher local no mapa</h3><p class="small">Mova o mapa até o ponto de encontro, igual no WhatsApp.</p></div><div id="location-picker-map" style="position:relative;height:100%"><span class="location-picker-pin" aria-hidden="true">📍</span></div><div class="location-picker-foot"><span class="location-picker-address small" data-picker-address>Buscando sua localização...</span><div class="location-picker-actions"><button type="button" class="secondary" data-picker-cancel>Cancelar</button><button type="button" class="primary" data-picker-confirm>Usar este local</button></div></div></div>`;
     document.body.appendChild(overlay);
-    const current = { lat: -14.235, lng: -51.925, name: '' };
+    const current = { lat: -14.235, lng: -51.925, name: 'Ponto em -14.235, -51.925' };
     const addressEl = overlay.querySelector('[data-picker-address]');
     let geocodeTimer = null;
     let picker = null;
