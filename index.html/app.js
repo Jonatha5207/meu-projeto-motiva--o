@@ -1194,7 +1194,16 @@ function openModal({ title, message, fields = [], confirmText = 'Salvar', cancel
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `<div class="modal-sheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}"><h3>${escapeHtml(title)}</h3>${message ? `<p class="small">${escapeHtml(message)}</p>` : ''}${fields.map(field => `<label class="field-label" for="modal-${field.id}">${escapeHtml(field.label)}</label>${field.type === 'select' ? `<select id="modal-${field.id}" class="text-input">${(field.options || []).map(option => `<option value="${escapeHtml(option)}" ${option === field.value ? 'selected' : ''}>${escapeHtml(option)}</option>`).join('')}</select>` : `<input id="modal-${field.id}" class="text-input" type="${field.type || 'text'}" value="${escapeHtml(field.value ?? '')}" ${field.min !== undefined ? `min="${field.min}"` : ''} ${field.max !== undefined ? `max="${field.max}"` : ''} />`}`).join('')}<div class="modal-actions"><button type="button" class="secondary" data-modal-cancel>${escapeHtml(cancelText)}</button><button type="button" class="${danger ? 'danger-action modal-danger' : 'primary'}" data-modal-confirm>${escapeHtml(confirmText)}</button></div></div>`;
     document.body.appendChild(overlay);
-    const close = result => { overlay.remove(); resolve(result); };
+    const fitToKeyboard = () => {
+      if (!window.visualViewport) return;
+      overlay.style.height = `${window.visualViewport.height}px`;
+      const sheet = overlay.querySelector('.modal-sheet');
+      if (sheet) sheet.style.maxHeight = `${Math.max(160, window.visualViewport.height - 24)}px`;
+    };
+    fitToKeyboard();
+    window.visualViewport?.addEventListener('resize', fitToKeyboard);
+    overlay.querySelectorAll('input, select').forEach(field => field.addEventListener('focus', () => window.setTimeout(() => field.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)));
+    const close = result => { window.visualViewport?.removeEventListener('resize', fitToKeyboard); overlay.remove(); resolve(result); };
     overlay.querySelector('[data-modal-cancel]').addEventListener('click', () => close(null));
     overlay.addEventListener('click', event => { if (event.target === overlay) close(null); });
     overlay.querySelector('[data-modal-confirm]').addEventListener('click', () => {
