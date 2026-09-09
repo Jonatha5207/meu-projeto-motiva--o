@@ -44,6 +44,13 @@ class TokenStore(context: Context) {
         get() = prefs.getBoolean(KEY_ALWAYS_ON, false)
         set(value) = prefs.edit().putBoolean(KEY_ALWAYS_ON, value).apply()
 
+    /** Historico da tela "Falar com a Dana", serializado como JSON. Sem isso a
+     * conversa some toda vez que o app e reaberto, mesmo o resto do app lembrando
+     * de tudo. */
+    var chatHistory: String?
+        get() = prefs.getString(KEY_CHAT_HISTORY, null)
+        set(value) = prefs.edit().putString(KEY_CHAT_HISTORY, value).apply()
+
     fun clear() = prefs.edit().clear().apply()
 
     companion object {
@@ -53,5 +60,6 @@ class TokenStore(context: Context) {
         private const val KEY_TRAINING_TIME = "training_time"
         private const val KEY_SCHEDULED_CALL = "scheduled_call_enabled"
         private const val KEY_ALWAYS_ON = "always_on_enabled"
+        private const val KEY_CHAT_HISTORY = "chat_history"
     }
 }

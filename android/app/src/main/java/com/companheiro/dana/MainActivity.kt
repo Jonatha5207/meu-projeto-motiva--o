@@ -40,7 +40,26 @@ import com.companheiro.dana.ui.LoginScreen
 import com.companheiro.dana.voice.AudioPlayer
 import com.companheiro.dana.voice.SpeechToText
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.Calendar
+
+private fun serializeChatHistory(lines: List<ChatLine>): String {
+    val array = JSONArray()
+    lines.forEach { line -> array.put(JSONObject().apply { put("fromUser", line.fromUser); put("text", line.text) }) }
+    return array.toString()
+}
+
+private fun loadChatHistory(raw: String?): List<ChatLine> {
+    if (raw.isNullOrBlank()) return emptyList()
+    return try {
+        val array = JSONArray(raw)
+        (0 until array.length()).map { index ->
+            val item = array.getJSONObject(index)
+            ChatLine(fromUser = item.getBoolean("fromUser"), text = item.getString("text"))
+        }
+    } catch (e: Exception) { emptyList() }
+}
 
 class MainActivity : ComponentActivity() {
 
@@ -75,7 +94,10 @@ class MainActivity : ComponentActivity() {
         var authLoading by remember { mutableStateOf(false) }
         var authError by remember { mutableStateOf<String?>(null) }
 
-        val chatLines = remember { mutableStateListOf<ChatLine>() }
+        // Sem restaurar daqui, a conversa com a Dana desaparecia toda vez que o
+        // app era reaberto -- diferente do resto do app, que ja lembrava de tudo.
+        val chatLines = remember { mutableStateListOf<ChatLine>().apply { addAll(loadChatHistory(tokenStore.chatHistory)) } }
+        LaunchedEffect(chatLines.size) { tokenStore.chatHistory = serializeChatHistory(chatLines) }
         var isListening by remember { mutableStateOf(false) }
         var isThinking by remember { mutableStateOf(false) }
         var statusMessage by remember { mutableStateOf<String?>(null) }
