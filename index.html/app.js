@@ -805,7 +805,7 @@ function pickupEventTerms(activity) {
   return isTeam ? { noun: 'jogo', people: 'jogadores', verbCreate: 'Marcar um jogo' } : { noun: 'encontro', people: 'participantes', verbCreate: 'Marcar um encontro' };
 }
 function renderPickupEventsSection() {
-  const relevant = pickupEvents.filter(event => event.activity === data.profile.activity);
+  const relevant = pickupEvents.filter(event => event.activity === data.profile.activity || event.creator_id === data.userId || event.joined);
   const terms = pickupEventTerms(data.profile.activity);
   return `<div class="section-title"><div class="stat-line"><h3>${terms.noun === 'jogo' ? 'Jogos marcados' : 'Encontros marcados'}</h3><span class="status-pill">${relevant.length}</span></div></div><button class="secondary" style="width:100%;margin-bottom:14px" data-create-pickup-event>+ ${terms.verbCreate} de ${escapeHtml(data.profile.activity)}</button><div class="pickup-event-list">${relevant.length ? relevant.map(renderPickupEventCard).join('') : `<p class="small">Nenhum ${terms.noun} marcado ainda para essa modalidade. Que tal marcar o primeiro?</p>`}</div>`;
 }
