@@ -832,7 +832,14 @@ function initMeetingMap() {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }).addTo(mapInstance);
   const bounds = [];
   points.forEach(point => { const coordinates = [point.lat, point.lng]; bounds.push(coordinates); L.marker(coordinates).addTo(mapInstance).bindPopup(`<strong>${escapeHtml(point.name)}</strong><br>${escapeHtml(point.city)}`); });
-  liveLocationPeers.forEach(peer => { const coordinates = [peer.lat, peer.lng]; bounds.push(coordinates); L.circleMarker(coordinates, { radius: 9, color: '#d64545', fillColor: '#d64545', fillOpacity: .85, weight: 2 }).addTo(mapInstance).bindPopup(`<strong>${escapeHtml(peer.name || 'Alguém')}</strong><br>${escapeHtml(peer.activity || '')} · ao vivo agora`); });
+  liveLocationPeers.forEach(peer => {
+    const coordinates = [peer.lat, peer.lng];
+    bounds.push(coordinates);
+    const initial = escapeHtml((peer.name || '?')[0].toUpperCase());
+    L.marker(coordinates, { icon: L.divIcon({ className: 'live-peer-pin', html: `<span class="live-peer-pin-dot">${initial}</span><span class="live-peer-pin-pulse"></span>`, iconSize: [34, 34] }) })
+      .addTo(mapInstance)
+      .bindPopup(`<strong>${escapeHtml(peer.name || 'Alguém')}</strong><br>${escapeHtml(peer.activity || '')} · ao vivo agora`);
+  });
   pickupEvents.filter(event => Number.isFinite(event.lat) && Number.isFinite(event.lng)).forEach(event => {
     const coordinates = [event.lat, event.lng];
     bounds.push(coordinates);
