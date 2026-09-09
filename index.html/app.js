@@ -409,7 +409,16 @@ async function subscribeToPush() {
   } catch { /* Sem push real, o app continua funcionando com o reforço local em primeiro plano. */ }
 }
 async function enableNotifications() {
-  if (!('Notification' in window)) { toast('Notificações não suportadas'); return; }
+  if (!('Notification' in window)) {
+    // Dentro do app nativo (WebView) essa API do navegador nao existe --
+    // isso NAO e um bug, e uma limitacao do Android. O lembrete de treino ja
+    // funciona nativo (fora dessa tela); os outros avisos (meta semanal, jogo
+    // marcado) so chegam abrindo o site pelo Chrome por enquanto.
+    toast(nativeBluetoothSupported
+      ? 'Esse tipo de aviso não funciona dentro do app -- o lembrete de treino já chega por fora. Pra outros avisos, abra o site pelo Chrome.'
+      : 'Notificações não suportadas neste navegador');
+    return;
+  }
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') { toast('Permissão de notificação não concedida'); return; }
   data.profile.notificationsEnabled = true;
@@ -866,7 +875,19 @@ function initMeetingMap() {
   if (!window.L || !document.querySelector('#meeting-map')) return;
   const points = meetingPointsForUser().filter(point => point.id !== 'qualquer-cidade');
   mapInstance?.remove();
-  mapInstance = L.map('meeting-map').setView([-14.235, -51.925], 4);
+  mapInstance = L.map('meeting-map').setView(myLiveCoordinates || [-14.235, -51.925], myLiveCoordinates ? 13 : 4);
+  // Sem localizacao nem nenhum ponto marcado, o mapa ficava no zoom bem
+  // aberto (continente inteiro) e sempre aparecia algum lugar distante tipo
+  // Argentina na tela -- confuso pra quem nao sabe que e so o zoom padrao.
+  // Buscando a posicao real (sem ativar o compartilhamento ao vivo) da pra
+  // centralizar direito assim que ela chegar.
+  if (!myLiveCoordinates && navigator.geolocation) {
+    const mapAtRequestTime = mapInstance;
+    navigator.geolocation.getCurrentPosition(position => {
+      if (mapInstance !== mapAtRequestTime) return;
+      mapInstance.setView([position.coords.latitude, position.coords.longitude], 13);
+    }, () => {}, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+  }
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }).addTo(mapInstance);
   const bounds = [];
   points.forEach(point => { const coordinates = [point.lat, point.lng]; bounds.push(coordinates); L.marker(coordinates).addTo(mapInstance).bindPopup(`<strong>${escapeHtml(point.name)}</strong><br>${escapeHtml(point.city)}`); });
@@ -1079,7 +1100,7 @@ function disconnectHeartRateMonitor() {
   save();
   render();
 }
-function renderProfile() { return `<section class="screen">${header('Sobre você', 'PERFIL')}${renderModalityPanel(data.profile.activity, 'customize')}<div class="card profile-block"><div class="profile-line"><span class="small">Nome</span><strong>${escapeHtml(data.profile.name)}</strong></div><div class="profile-line"><span class="small">Atividades</span><strong>${escapeHtml((data.profile.activities || [data.profile.activity]).join(', '))}</strong></div><div class="profile-line"><span class="small">Rotina</span><strong>${data.profile.frequency}x por semana · ${data.profile.time} · ${data.profile.duration} min</strong></div><div class="profile-line"><span class="small">Dias</span><strong>${escapeHtml((data.profile.days || []).join(', ') || 'Não informado')}</strong></div><div class="profile-line"><span class="small">Deslocamento</span><strong>${escapeHtml(data.profile.commuteTime)} · ${escapeHtml(data.profile.transport)}</strong></div><div class="profile-line"><span class="small">Meu porquê</span><strong>${escapeHtml(data.profile.motivation || data.profile.goal)}</strong></div><div class="profile-line"><span class="small">Nível de disciplina</span><strong>${escapeHtml(data.profile.disciplineLevel)}</strong></div><div class="profile-line"><span class="small">Objeções</span><strong>${escapeHtml((data.profile.objections || [data.profile.objection]).join(', '))}</strong></div><div class="profile-line"><span class="small">Minha dificuldade</span><strong>${escapeHtml(data.profile.difficulty)}</strong></div><div class="profile-line"><span class="small">Contexto</span><strong>Trabalho: ${data.profile.workStatus} · Estudos: ${data.profile.studyStatus} · Filhos: ${data.profile.hasChildren}</strong></div></div><div class="section-title"><h3>Preferências</h3></div><div class="card"><div class="profile-line"><span>Notificações</span><button class="status-pill notification-button" data-notifications>${data.profile.notificationsEnabled ? 'desativar' : 'ativar'}</button></div><div class="profile-line"><span>Privacidade</span><span class="small">somente você</span></div></div><div class="section-title"><h3>Conectar dispositivos</h3></div><div class="card device-card">${renderHeartRateDeviceRow()}<div class="device-row"><div class="device-icon" aria-hidden="true">📶</div><div class="device-copy"><strong>Check-in por NFC</strong><p class="small">Aproxime o celular de uma tag na academia e o check-in acontece sozinho.</p></div><span class="status-pill status-neutral">Em breve</span></div><button class="secondary" data-device-notify>Avisar sobre o NFC quando estiver disponível</button></div><div class="section-title"><h3>Voz do Companheiro</h3></div><div class="card voice-card"><p class="small">Escolha o tom de voz que você prefere ouvir.</p><select id="voice-preference" class="text-input">${TTS_VOICE_LABELS.map(([value, label]) => `<option value="${value}" ${data.profile.voicePreference === value ? 'selected' : ''}>${label}</option>`).join('')}</select><button class="secondary" style="margin-top:10px" data-test-voice>▶ Testar esta voz</button></div><button class="secondary" style="width:100%;margin-top:18px" data-reset>Refazer onboarding</button><button class="text-action" data-logout>Sair da conta</button></section>`; }
+function renderProfile() { return `<section class="screen">${header('Sobre você', 'PERFIL')}${renderModalityPanel(data.profile.activity, 'customize')}<div class="card profile-block"><div class="profile-line"><span class="small">Nome</span><strong>${escapeHtml(data.profile.name)}</strong></div><div class="profile-line"><span class="small">Atividades</span><strong>${escapeHtml((data.profile.activities || [data.profile.activity]).join(', '))}</strong></div><div class="profile-line"><span class="small">Rotina</span><strong>${data.profile.frequency}x por semana · ${data.profile.time} · ${data.profile.duration} min</strong></div><div class="profile-line"><span class="small">Dias</span><strong>${escapeHtml((data.profile.days || []).join(', ') || 'Não informado')}</strong></div><div class="profile-line"><span class="small">Deslocamento</span><strong>${escapeHtml(data.profile.commuteTime)} · ${escapeHtml(data.profile.transport)}</strong></div><div class="profile-line"><span class="small">Meu porquê</span><strong>${escapeHtml(data.profile.motivation || data.profile.goal)}</strong></div><div class="profile-line"><span class="small">Nível de disciplina</span><strong>${escapeHtml(data.profile.disciplineLevel)}</strong></div><div class="profile-line"><span class="small">Objeções</span><strong>${escapeHtml((data.profile.objections || [data.profile.objection]).join(', '))}</strong></div><div class="profile-line"><span class="small">Minha dificuldade</span><strong>${escapeHtml(data.profile.difficulty)}</strong></div><div class="profile-line"><span class="small">Contexto</span><strong>Trabalho: ${data.profile.workStatus} · Estudos: ${data.profile.studyStatus} · Filhos: ${data.profile.hasChildren}</strong></div></div><div class="section-title"><h3>Preferências</h3></div><div class="card"><div class="profile-line"><span>Notificações${nativeBluetoothSupported ? '<br><span class="small" style="font-weight:400">Lembrete de treino já funciona no app. Outros avisos: abra pelo Chrome.</span>' : ''}</span><button class="status-pill notification-button" data-notifications>${data.profile.notificationsEnabled ? 'desativar' : 'ativar'}</button></div><div class="profile-line"><span>Privacidade</span><span class="small">somente você</span></div></div><div class="section-title"><h3>Conectar dispositivos</h3></div><div class="card device-card">${renderHeartRateDeviceRow()}<div class="device-row"><div class="device-icon" aria-hidden="true">📶</div><div class="device-copy"><strong>Check-in por NFC</strong><p class="small">Aproxime o celular de uma tag na academia e o check-in acontece sozinho.</p></div><span class="status-pill status-neutral">Em breve</span></div><button class="secondary" data-device-notify>Avisar sobre o NFC quando estiver disponível</button></div><div class="section-title"><h3>Voz do Companheiro</h3></div><div class="card voice-card"><p class="small">Escolha o tom de voz que você prefere ouvir.</p><select id="voice-preference" class="text-input">${TTS_VOICE_LABELS.map(([value, label]) => `<option value="${value}" ${data.profile.voicePreference === value ? 'selected' : ''}>${label}</option>`).join('')}</select><button class="secondary" style="margin-top:10px" data-test-voice>▶ Testar esta voz</button></div><button class="secondary" style="width:100%;margin-top:18px" data-reset>Refazer onboarding</button><button class="text-action" data-logout>Sair da conta</button></section>`; }
 
 function addMessage(from, text) { data.messages.push({ from, text }); save(); syncMessageToBackend(from, text); }
 function contextualFallbackResponse(text) {
