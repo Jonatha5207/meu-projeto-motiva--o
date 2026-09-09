@@ -32,7 +32,26 @@ async function requireAcceptedConnection(store, userId, connectionId) {
   return connection;
 }
 
-export function createCommunityService({ store }) {
+export function createCommunityService({ store, notificationService }) {
+  // Antes so quem estivesse com o app aberto na hora ficava sabendo de um
+  // jogo/encontro novo (via SSE). Agora quem tiver a mesma modalidade recebe
+  // uma notificacao push de verdade, mesmo com o app fechado.
+  async function notifyPeopleAboutPickupEvent(event, creatorId) {
+    if (!notificationService) return;
+    const allUsers = await store.listAllUsers();
+    const interested = await Promise.all(allUsers
+      .filter(user => user.id !== creatorId)
+      .map(async user => ({ user, profile: await store.getProfile(user.id) })));
+    const recipients = interested.filter(({ profile }) => profile?.activity === event.activity);
+    const when = new Date(event.scheduled_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    await Promise.all(recipients.map(({ user }) => notificationService.pushToUser(user.id, {
+      title: `Novo ${event.title.includes('jogo') ? 'jogo' : 'encontro'} de ${event.activity}`,
+      body: `${event.location_name} · ${when}`,
+      key: 'PICKUP_EVENT_CREATED',
+      tag: `companheiro-pickup-${event.id}`,
+    })));
+  }
+
   return {
     async listPeople(userId) {
       const [allUsers, myProfile, myConnections] = await Promise.all([store.listAllUsers(), store.getProfile(userId), store.listConnectionsForUser(userId)]);
@@ -157,6 +176,7 @@ export function createCommunityService({ store }) {
       await store.createPickupEvent(event);
       await store.joinPickupEvent(event.id, userId);
       broadcastRealtime('pickup-event-created', { id: event.id, activity });
+      notifyPeopleAboutPickupEvent(event, userId).catch(() => {});
       return decoratePickupEvent(store, event, userId);
     },
 

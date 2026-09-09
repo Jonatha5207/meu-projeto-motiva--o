@@ -115,7 +115,7 @@ window.addEventListener('appinstalled', () => {
 });
 window.addEventListener('online', () => { if (currentView !== 'login') render(); });
 window.addEventListener('offline', () => { if (currentView !== 'login') render(); });
-if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type !== 'notification-opened') return; trackEvent('NOTIFICATION_OPENED', { type: event.data.key }); currentView = 'chat'; render(); if (event.data.text) window.setTimeout(() => playHumanMotivation(event.data.text), 120); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type !== 'notification-opened') return; trackEvent('NOTIFICATION_OPENED', { type: event.data.key }); if (event.data.key === 'PICKUP_EVENT_CREATED') { currentView = 'map'; render(); return; } currentView = 'chat'; render(); if (event.data.text) window.setTimeout(() => playHumanMotivation(event.data.text), 120); });
 
 function load() {
   try { return { ...initialData, ...JSON.parse(localStorage.getItem(STORAGE_KEY)) }; } catch { return initialData; }
@@ -1161,7 +1161,7 @@ function renderRoutineV3() {
 }
 
 function renderNavMvp() {
-  return `<nav class="bottom-nav" aria-label="Navegacao principal">${[['home','Inicio'],['today','Treino'],['routine','Rotina'],['community','Comunidade'],['profile','Perfil']].map(([id, label]) => `<button class="nav-item ${currentView === id ? 'active' : ''}" data-view="${id}" aria-current="${currentView === id ? 'page' : 'false'}"><span aria-hidden="true">${icon(id)}</span>${label}</button>`).join('')}</nav>`;
+  return `<nav class="bottom-nav" aria-label="Navegacao principal">${[['home','Inicio'],['today','Treino'],['map','Mapa'],['routine','Rotina'],['community','Comunidade'],['profile','Perfil']].map(([id, label]) => `<button class="nav-item ${id === 'map' ? 'nav-item-map' : ''} ${currentView === id ? 'active' : ''}" data-view="${id}" aria-current="${currentView === id ? 'page' : 'false'}"><span aria-hidden="true">${icon(id)}</span>${label}</button>`).join('')}</nav>`;
 }
 
 function feedPosts() {

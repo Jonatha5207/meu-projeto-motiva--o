@@ -60,6 +60,7 @@ export function createNotificationService({ store, analyticsService, logger }) {
 
   return {
     vapidPublicKey: () => (vapidConfigured ? process.env.VAPID_PUBLIC_KEY : null),
+    pushToUser: sendWebPushToUser,
 
     buildSessionNotifications(session, durationMinutes) {
       return ['T_MINUS_60', 'T_MINUS_45', 'T_MINUS_30', 'T_MINUS_20', 'POST_TRAINING']

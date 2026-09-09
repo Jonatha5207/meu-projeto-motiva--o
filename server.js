@@ -48,7 +48,7 @@ const conversationService = createConversationService({ store, analyticsService 
 const aiService = createAiService({ logger });
 const voiceService = createVoiceService();
 const socialService = createSocialService({ store, onFeedUpdated: post => broadcastRealtime('feed-updated', post) });
-const communityService = createCommunityService({ store });
+const communityService = createCommunityService({ store, notificationService });
 
 const services = {
   analytics: analyticsService,
