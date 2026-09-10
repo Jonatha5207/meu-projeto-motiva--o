@@ -74,7 +74,7 @@ h3 { font-size: 16px; font-weight: 700; }
 .icon-button { border: 0; background: transparent; color: var(--muted); width: 38px; height: 38px; border-radius: 50%; font-size: 20px; }
 .icon-button:hover { background: var(--sage); color: var(--green-dark); }
 
-.onboarding { display: flex; flex-direction: column; padding-top: 44px; padding-bottom: 28px; }
+.onboarding { display: flex; flex-direction: column; justify-content: center; padding-top: 44px; padding-bottom: 28px; }
 .onboarding .button-row { margin-top: 40px; }
 .onboarding .hero { margin-top: 13vh; }
 .login-screen { display: flex; flex-direction: column; min-height: 100vh; }
