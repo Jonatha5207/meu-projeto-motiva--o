@@ -121,7 +121,12 @@ function load() {
   try { return { ...initialData, ...JSON.parse(localStorage.getItem(STORAGE_KEY)) }; } catch { return initialData; }
 }
 function speakWelcome(name) {
-  playHumanMotivation(`Oi, ${name}. Eu sou seu Companheiro. Vou estar com você nos dias bons e nos dias difíceis. Hoje a gente só precisa dar um pequeno passo.`);
+  // Silencioso de proposito: isso toca assim que a pessoa entra (as vezes
+  // ainda na primeira tela do onboarding, antes de ela ter feito qualquer
+  // coisa) -- um toast "Reproduzindo motivacao" aparecendo do nada por cima
+  // do onboarding parecia um bug visual solto na tela, entao a fala continua
+  // mas sem a notificacao textual.
+  playHumanMotivation(`Oi, ${name}. Eu sou seu Companheiro. Vou estar com você nos dias bons e nos dias difíceis. Hoje a gente só precisa dar um pequeno passo.`, true);
 }
 let googleClientId = null;
 async function loadGoogleClientId() {
@@ -321,22 +326,22 @@ function buildMotivation(seed = Math.random()) {
 function dailyMotivation() { const daySeed = new Date().getFullYear() * 366 + new Date().getMonth() * 31 + new Date().getDate(); return buildMotivation((daySeed % 1000) / 1000); }
 function motivationText() { if (!currentMotivation) currentMotivation = dailyMotivation(); return currentMotivation; }
 function refreshMotivation() { currentMotivation = buildMotivation(); render(); toast('Nova motivação pronta'); }
-function speakMotivation(text = motivationText()) {
-  if (!('speechSynthesis' in window)) { toast('Áudio não suportado neste aparelho'); return; }
+function speakMotivation(text = motivationText(), silent = false) {
+  if (!('speechSynthesis' in window)) { if (!silent) toast('Áudio não suportado neste aparelho'); return; }
   window.speechSynthesis.cancel();
   const speech = new SpeechSynthesisUtterance(text);
   const voice = window.speechSynthesis.getVoices().find(item => item.lang.toLowerCase().startsWith('pt-br'));
   if (voice) speech.voice = voice;
   speech.lang = 'pt-BR'; speech.rate = 0.9; speech.pitch = 1.02;
-  window.speechSynthesis.speak(speech); toast('Reproduzindo motivação');
+  window.speechSynthesis.speak(speech); if (!silent) toast('Reproduzindo motivação');
 }
-async function playHumanMotivation(text = motivationText()) {
-  if (!HUMAN_AUDIO_ENDPOINT) { speakMotivation(text); return; }
+async function playHumanMotivation(text = motivationText(), silent = false) {
+  if (!HUMAN_AUDIO_ENDPOINT) { speakMotivation(text, silent); return; }
   try {
     const audioBlob = await apiAudioRequest('/api/motivation-audio', { method: 'POST', body: JSON.stringify({ text, language: 'pt-BR', voice: data.profile.voicePreference || 'coral' }) });
     const audioUrl = URL.createObjectURL(audioBlob);
-    const audio = new Audio(audioUrl); await audio.play(); toast('Áudio com voz humana');
-  } catch { speakMotivation(text); }
+    const audio = new Audio(audioUrl); await audio.play(); if (!silent) toast('Áudio com voz humana');
+  } catch { speakMotivation(text, silent); }
 }
 async function showAppNotification(title, options) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
@@ -1191,7 +1196,7 @@ function openProfileDetailsModal() {
   overlay.querySelector('[data-close-profile-details]').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', event => { if (event.target === overlay) overlay.remove(); });
 }
-function renderProfile() { return `<section class="screen">${header('Sobre você', 'PERFIL')}${renderProfileIdentityHeader()}${renderModalityPanel(data.profile.activity, 'customize')}<div class="section-title"><h3>Preferências</h3></div><div class="card"><div class="profile-line"><span>Notificações${nativeBluetoothSupported ? '<br><span class="small" style="font-weight:400">Lembrete de treino já funciona no app. Outros avisos: abra pelo Chrome.</span>' : ''}</span><button class="status-pill notification-button" data-notifications>${data.profile.notificationsEnabled ? 'desativar' : 'ativar'}</button></div><div class="profile-line"><span>Privacidade</span><span class="small">somente você</span></div></div><div class="section-title"><h3>Conectar dispositivos</h3></div><div class="card device-card">${renderHeartRateDeviceRow()}<div class="device-row"><div class="device-icon" aria-hidden="true">📶</div><div class="device-copy"><strong>Check-in por NFC</strong><p class="small">Aproxime o celular de uma tag na academia e o check-in acontece sozinho.</p></div><span class="status-pill status-neutral">Em breve</span></div><button class="secondary" data-device-notify>Avisar sobre o NFC quando estiver disponível</button></div><div class="section-title"><h3>Voz do Companheiro</h3></div><div class="card voice-card"><p class="small">Escolha o tom de voz que você prefere ouvir.</p><select id="voice-preference" class="text-input">${TTS_VOICE_LABELS.map(([value, label]) => `<option value="${value}" ${data.profile.voicePreference === value ? 'selected' : ''}>${label}</option>`).join('')}</select><button class="secondary" style="margin-top:10px" data-test-voice>▶ Testar esta voz</button></div>${renderProfileMenu()}</section>`; }
+function renderProfile() { return `<section class="screen">${header('Sobre você', 'PERFIL')}${renderProfileIdentityHeader()}<div class="section-title"><h3>Preferências</h3></div><div class="card"><div class="profile-line"><span>Notificações${nativeBluetoothSupported ? '<br><span class="small" style="font-weight:400">Lembrete de treino já funciona no app. Outros avisos: abra pelo Chrome.</span>' : ''}</span><button class="status-pill notification-button" data-notifications>${data.profile.notificationsEnabled ? 'desativar' : 'ativar'}</button></div><div class="profile-line"><span>Privacidade</span><span class="small">somente você</span></div></div><div class="section-title"><h3>Conectar dispositivos</h3></div><div class="card device-card">${renderHeartRateDeviceRow()}<div class="device-row"><div class="device-icon" aria-hidden="true">📶</div><div class="device-copy"><strong>Check-in por NFC</strong><p class="small">Aproxime o celular de uma tag na academia e o check-in acontece sozinho.</p></div><span class="status-pill status-neutral">Em breve</span></div><button class="secondary" data-device-notify>Avisar sobre o NFC quando estiver disponível</button></div><div class="section-title"><h3>Voz do Companheiro</h3></div><div class="card voice-card"><p class="small">Escolha o tom de voz que você prefere ouvir.</p><select id="voice-preference" class="text-input">${TTS_VOICE_LABELS.map(([value, label]) => `<option value="${value}" ${data.profile.voicePreference === value ? 'selected' : ''}>${label}</option>`).join('')}</select><button class="secondary" style="margin-top:10px" data-test-voice>▶ Testar esta voz</button></div>${renderProfileMenu()}</section>`; }
 
 function addMessage(from, text) { data.messages.push({ from, text }); save(); syncMessageToBackend(from, text); }
 function contextualFallbackResponse(text) {
