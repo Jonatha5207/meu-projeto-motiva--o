@@ -789,6 +789,34 @@ function statusLabel(status) { return ({ PREPARING: 'preparação', OBJECTION: '
 function statusVisual(status) { return ({ PENDING: 'neutral', PREPARING: 'attention', ENGAGED: 'active', OBJECTION: 'conversation', PREPARING_TO_GO: 'active', LEFT: 'active', COMPLETED: 'success', CANCELLED: 'neutral', RESCHEDULED: 'neutral', NOT_COMPLETED: 'neutral' }[status] || 'neutral'); }
 function meetingPointsForUser() { const activity = data.profile.activity; return meetingPointCatalog.filter(point => point.activities.includes(activity) || point.activities.includes('Outra') || point.id === 'qualquer-cidade'); }
 let pickupEvents = [];
+let mapFilters = { sport: 'all', maxPriceCents: null, timeWindow: 'any', radiusKm: null };
+function withinTimeWindow(iso, window) {
+  if (window === 'any') return true;
+  const target = new Date(iso), now = new Date();
+  if (window === 'today') return target.toDateString() === now.toDateString();
+  const weekAhead = new Date(now.getTime() + 7 * 86400000);
+  return target >= now && target <= weekAhead;
+}
+function filterPickupEventsForMap(events) {
+  return events.filter(event => {
+    if (mapFilters.sport !== 'all' && event.activity !== mapFilters.sport) return false;
+    if (mapFilters.maxPriceCents != null && event.price_cents > mapFilters.maxPriceCents) return false;
+    if (!withinTimeWindow(event.scheduled_at, mapFilters.timeWindow)) return false;
+    if (mapFilters.radiusKm != null && myLiveCoordinates && Number.isFinite(event.lat) && Number.isFinite(event.lng)) {
+      if (distanceBetween(myLiveCoordinates, [event.lat, event.lng]) / 1000 > mapFilters.radiusKm) return false;
+    }
+    return true;
+  });
+}
+function filterMeetingPointsForMap(points) {
+  return points.filter(point => {
+    if (mapFilters.sport !== 'all' && point.id !== 'qualquer-cidade' && !point.activities.includes(mapFilters.sport)) return false;
+    if (mapFilters.radiusKm != null && myLiveCoordinates && point.id !== 'qualquer-cidade') {
+      if (distanceBetween(myLiveCoordinates, [point.lat, point.lng]) / 1000 > mapFilters.radiusKm) return false;
+    }
+    return true;
+  });
+}
 function formatEventDateTime(iso) {
   const date = new Date(iso);
   return `${date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
@@ -874,10 +902,16 @@ function renderNearbyPlacesSection() {
   if (nearbyPlacesConfigured === null) return `<div class="section-title"><h3>Academias e locais perto de você</h3></div><p class="small">Buscando locais reais perto de você...</p>`;
   return `<div class="section-title"><div class="stat-line"><h3>Academias e locais perto de você</h3><span class="status-pill">Google</span></div></div><div class="nearby-place-list">${nearbyPlaces.length ? nearbyPlaces.map(renderNearbyPlaceCard).join('') : '<p class="small">Nenhum resultado agora. Tente de novo mais perto do local.</p>'}</div>`;
 }
-function renderMap() { const points = meetingPointsForUser(); return `<section class="screen map-screen">${header('Mapa', 'MAPA')}<div class="map-toolbar"><button class="map-toolbar-button" type="button" data-open-map-filters>⚙ Filtros</button><button class="map-toolbar-button ${liveLocationSharing ? 'active' : ''}" type="button" data-toggle-live-location>${liveLocationSharing ? '● Você está visível' : '◌ Ficar visível'}</button></div><div id="meeting-map" class="map-hero" aria-label="Mapa com pontos públicos de encontro"></div><p class="map-safety-note">✓ Só locais públicos. Nunca sua localização exata.</p><button class="secondary map-fit-button" data-fit-meeting-map>Ver todos os pontos no mapa</button>${renderPickupEventsSection()}<div class="section-title"><div class="stat-line"><h3>Para ${escapeHtml(data.profile.activity)}</h3><span class="status-pill">${points.length} pontos</span></div></div><div class="meeting-point-list">${points.map(point => { const joined = data.community.meetingPointIds.includes(point.id); const count = point.members + (joined ? 1 : 0); return `<article class="card meeting-point-card"><div class="meeting-point-head"><div class="meeting-point-icon">${sportIcon(data.profile.activity)}</div><div><h3>${escapeHtml(point.name)}</h3><p class="small">${escapeHtml(point.city)}</p></div><span class="point-distance">público</span></div><p class="meeting-point-note">${escapeHtml(point.note)}</p><div class="meeting-point-nav">${point.id !== 'qualquer-cidade' ? `<a class="nav-link nav-link-primary" href="https://waze.com/ul?ll=${point.lat},${point.lng}&navigate=yes" target="_blank" rel="noopener">🧭 Ir de Waze</a><a class="nav-link" href="https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}" target="_blank" rel="noopener">📍 Ir de Google Maps</a>` : `<a class="nav-link nav-link-primary" href="https://waze.com/ul?q=${encodeURIComponent(data.profile.activity || 'atividade fisica')}&navigate=yes" target="_blank" rel="noopener">🧭 Buscar no Waze perto de mim</a><a class="nav-link" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((data.profile.activity || 'atividade fisica') + ' perto de mim')}" target="_blank" rel="noopener">📍 Buscar no Google Maps</a>`}</div><div class="meeting-point-meta"><span><strong>${count}</strong> interessados</span><span>${escapeHtml(point.activities.slice(0, 2).join(' · '))}</span></div><button class="${joined ? 'secondary' : 'primary'} meeting-point-button" data-meeting-point="${point.id}">${joined ? 'Você está neste ponto' : 'Quero encontrar pessoas aqui'}</button></article>`; }).join('')}</div>${renderNearbyPlacesSection()}</section>`; }
+function renderMapEventsSection() {
+  const filtersActive = mapFilters.sport !== 'all' || mapFilters.maxPriceCents != null || mapFilters.timeWindow !== 'any' || mapFilters.radiusKm != null;
+  if (!filtersActive) return renderPickupEventsSection();
+  const filtered = filterPickupEventsForMap(pickupEvents);
+  return `<div class="section-title"><div class="stat-line"><h3>Encontros filtrados</h3><span class="status-pill">${filtered.length}</span></div></div><div class="pickup-event-list">${filtered.length ? filtered.map(renderPickupEventCard).join('') : '<p class="small">Nenhum resultado com esses filtros.</p>'}</div>`;
+}
+function renderMap() { const points = meetingPointsForUser(); return `<section class="screen map-screen">${header('Mapa', 'MAPA')}<div class="map-toolbar"><button class="map-toolbar-button" type="button" data-open-map-filters>⚙ Filtros</button><button class="map-toolbar-button ${liveLocationSharing ? 'active' : ''}" type="button" data-toggle-live-location>${liveLocationSharing ? '● Você está visível' : '◌ Ficar visível'}</button></div><div id="meeting-map" class="map-hero" aria-label="Mapa com pontos públicos de encontro"></div><p class="map-safety-note">✓ Só locais públicos. Nunca sua localização exata.</p><button class="secondary map-fit-button" data-fit-meeting-map>Ver todos os pontos no mapa</button>${renderMapEventsSection()}<div class="section-title"><div class="stat-line"><h3>Para ${escapeHtml(data.profile.activity)}</h3><span class="status-pill">${points.length} pontos</span></div></div><div class="meeting-point-list">${points.map(point => { const joined = data.community.meetingPointIds.includes(point.id); const count = point.members + (joined ? 1 : 0); return `<article class="card meeting-point-card"><div class="meeting-point-head"><div class="meeting-point-icon">${sportIcon(data.profile.activity)}</div><div><h3>${escapeHtml(point.name)}</h3><p class="small">${escapeHtml(point.city)}</p></div><span class="point-distance">público</span></div><p class="meeting-point-note">${escapeHtml(point.note)}</p><div class="meeting-point-nav">${point.id !== 'qualquer-cidade' ? `<a class="nav-link nav-link-primary" href="https://waze.com/ul?ll=${point.lat},${point.lng}&navigate=yes" target="_blank" rel="noopener">🧭 Ir de Waze</a><a class="nav-link" href="https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}" target="_blank" rel="noopener">📍 Ir de Google Maps</a>` : `<a class="nav-link nav-link-primary" href="https://waze.com/ul?q=${encodeURIComponent(data.profile.activity || 'atividade fisica')}&navigate=yes" target="_blank" rel="noopener">🧭 Buscar no Waze perto de mim</a><a class="nav-link" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((data.profile.activity || 'atividade fisica') + ' perto de mim')}" target="_blank" rel="noopener">📍 Buscar no Google Maps</a>`}</div><div class="meeting-point-meta"><span><strong>${count}</strong> interessados</span><span>${escapeHtml(point.activities.slice(0, 2).join(' · '))}</span></div><button class="${joined ? 'secondary' : 'primary'} meeting-point-button" data-meeting-point="${point.id}">${joined ? 'Você está neste ponto' : 'Quero encontrar pessoas aqui'}</button></article>`; }).join('')}</div>${renderNearbyPlacesSection()}</section>`; }
 function initMeetingMap() {
   if (!window.L || !document.querySelector('#meeting-map')) return;
-  const points = meetingPointsForUser().filter(point => point.id !== 'qualquer-cidade');
+  const points = filterMeetingPointsForMap(meetingPointsForUser().filter(point => point.id !== 'qualquer-cidade'));
   mapInstance?.remove();
   mapInstance = L.map('meeting-map').setView(myLiveCoordinates || [-14.235, -51.925], myLiveCoordinates ? 13 : 4);
   // Sem localizacao nem nenhum ponto marcado, o mapa ficava no zoom bem
@@ -922,7 +956,7 @@ function initMeetingMap() {
       upgradeRouteToRealPath(mapInstance, myLiveCoordinates, peerCoordinates, line, label, distanceLabel);
     });
   }
-  pickupEvents.filter(event => Number.isFinite(event.lat) && Number.isFinite(event.lng)).forEach(event => {
+  filterPickupEventsForMap(pickupEvents.filter(event => Number.isFinite(event.lat) && Number.isFinite(event.lng))).forEach(event => {
     const coordinates = [event.lat, event.lng];
     bounds.push(coordinates);
     L.marker(coordinates, { icon: L.divIcon({ className: 'pickup-map-pin', html: '⚽', iconSize: [30, 30] }) }).addTo(mapInstance)
@@ -1000,6 +1034,43 @@ async function toggleLiveLocationSharing() {
   }, () => toast('Permissão de localização negada'), { enableHighAccuracy: true, timeout: 10000 });
 }
 function fitMeetingMap() { if (mapInstance && currentView === 'map') initMeetingMap(); else toast('Abra o mapa de encontros primeiro'); }
+function openMapFiltersModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal-sheet map-filters-sheet" role="dialog" aria-modal="true" aria-label="Filtros do mapa">
+    <h3>Filtros</h3>
+    <span class="field-label">Modalidade</span>
+    <div class="choice-grid map-filter-sports">
+      <button type="button" class="choice ${mapFilters.sport === 'all' ? 'selected' : ''}" data-filter-sport="all">Todas</button>
+      ${sportCatalog.map(sport => `<button type="button" class="choice ${mapFilters.sport === sport ? 'selected' : ''}" data-filter-sport="${escapeHtml(sport)}">${escapeHtml(sport)}</button>`).join('')}
+    </div>
+    <span class="field-label">Quando</span>
+    <div class="challenge-period-tabs map-filter-time">
+      ${[['any', 'Qualquer'], ['today', 'Hoje'], ['week', 'Essa semana']].map(([value, label]) => `<button type="button" class="period-tab ${mapFilters.timeWindow === value ? 'selected' : ''}" data-filter-time="${value}">${label}</button>`).join('')}
+    </div>
+    <label class="field-label" for="filter-price">Preço máximo (R$)</label>
+    <input id="filter-price" class="text-input" type="number" min="0" placeholder="Sem limite" value="${mapFilters.maxPriceCents != null ? mapFilters.maxPriceCents / 100 : ''}" />
+    <label class="field-label" for="filter-radius">Distância máxima (km)${myLiveCoordinates ? '' : ' — ative "Ficar visível" para usar'}</label>
+    <input id="filter-radius" type="range" min="1" max="50" value="${mapFilters.radiusKm || 10}" ${myLiveCoordinates ? '' : 'disabled'} />
+    <div class="modal-actions"><button type="button" class="secondary" data-filters-clear>Limpar</button><button type="button" class="primary" data-filters-apply>Aplicar</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelectorAll('[data-filter-sport]').forEach(button => button.addEventListener('click', () => { overlay.querySelectorAll('[data-filter-sport]').forEach(b => b.classList.remove('selected')); button.classList.add('selected'); }));
+  overlay.querySelectorAll('[data-filter-time]').forEach(button => button.addEventListener('click', () => { overlay.querySelectorAll('[data-filter-time]').forEach(b => b.classList.remove('selected')); button.classList.add('selected'); }));
+  overlay.querySelector('[data-filters-clear]').addEventListener('click', () => { mapFilters = { sport: 'all', maxPriceCents: null, timeWindow: 'any', radiusKm: null }; close(); render(); toast('Filtros limpos'); });
+  overlay.querySelector('[data-filters-apply]').addEventListener('click', () => {
+    mapFilters.sport = overlay.querySelector('[data-filter-sport].selected')?.dataset.filterSport || 'all';
+    mapFilters.timeWindow = overlay.querySelector('[data-filter-time].selected')?.dataset.filterTime || 'any';
+    const priceInput = overlay.querySelector('#filter-price').value;
+    mapFilters.maxPriceCents = priceInput ? Math.round(Number(priceInput) * 100) : null;
+    mapFilters.radiusKm = myLiveCoordinates ? Number(overlay.querySelector('#filter-radius').value) : null;
+    close();
+    render();
+    toast('Filtros aplicados');
+  });
+  overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+}
 function distanceBetween(first, second) { const earthRadius = 6371000; const latitudeDelta = (second[0] - first[0]) * Math.PI / 180; const longitudeDelta = (second[1] - first[1]) * Math.PI / 180; const latitude = first[0] * Math.PI / 180; const nextLatitude = second[0] * Math.PI / 180; const a = Math.sin(latitudeDelta / 2) ** 2 + Math.sin(longitudeDelta / 2) ** 2 * Math.cos(latitude) * Math.cos(nextLatitude); return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); }
 function updateTripMetrics() { const distance = document.querySelector('[data-trip-distance]'); const speed = document.querySelector('[data-trip-speed]'); const time = document.querySelector('[data-trip-time]'); if (!distance || !speed || !time) return; distance.textContent = tripState.distanceMeters < 1000 ? `${Math.round(tripState.distanceMeters)} m` : `${(tripState.distanceMeters / 1000).toFixed(2)} km`; speed.textContent = `${tripState.speedKmh.toFixed(1)} km/h`; const seconds = tripState.startedAt ? Math.floor((Date.now() - tripState.startedAt) / 1000) : 0; time.textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`; }
 function initMap() {
@@ -1479,6 +1550,7 @@ function bindEvents() {
   document.querySelector('[data-center-map]')?.addEventListener('click', centerMap);
   document.querySelector('[data-fit-meeting-map]')?.addEventListener('click', fitMeetingMap);
   document.querySelector('[data-toggle-live-location]')?.addEventListener('click', toggleLiveLocationSharing);
+  document.querySelector('[data-open-map-filters]')?.addEventListener('click', openMapFiltersModal);
   document.querySelectorAll('[data-open-drawer]').forEach(button => button.addEventListener('click', openSportDrawer));
   document.querySelector('[data-create-pickup-event]')?.addEventListener('click', openCreatePickupEventModal);
   document.querySelectorAll('[data-pickup-event]').forEach(button => button.addEventListener('click', async () => {

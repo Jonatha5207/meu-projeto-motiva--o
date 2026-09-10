@@ -260,6 +260,11 @@ h3 { font-size: 16px; font-weight: 700; }
 .modal-sheet .field-label:first-of-type { margin-top: 18px; }
 .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
 .modal-actions button { flex: 1; }
+.map-filters-sheet .map-filter-sports { grid-template-columns: repeat(3, 1fr); max-height: 180px; overflow-y: auto; padding-right: 2px; }
+.map-filters-sheet .map-filter-sports .choice { min-height: 44px; padding: 10px 8px; font-size: 12px; text-align: center; }
+.map-filters-sheet .map-filter-time .period-tab { border-color: var(--line); color: var(--muted); }
+.map-filters-sheet .map-filter-time .period-tab.selected { background: var(--lime); border-color: var(--lime); color: var(--green-dark); }
+.map-filters-sheet input[type="range"] { width: 100%; margin-top: 6px; }
 @media (min-width: 700px) { .modal-overlay { align-items: center; } .modal-sheet { border-radius: 24px; } }
 .heart-burst { position: fixed; z-index: 50; transform: translate(-50%, -50%); font-size: 64px; pointer-events: none; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .3)); animation: heart-pop .7s ease; }
 @keyframes heart-pop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.4); } 22% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } 45% { transform: translate(-50%, -50%) scale(.95); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1); } }
