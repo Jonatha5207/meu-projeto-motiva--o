@@ -186,6 +186,10 @@ fun CompanheiroWebScreen(
                     // Sem log nenhum de console antes -- se a tela travar (fundo
                     // escurecido preso) de novo, isso deixa registrado qualquer erro JS
                     // que tiver acontecido no exato momento, em vez de so suspeitar.
+                    // O toast e novo: os relatos de tela branca nunca vieram acompanhados
+                    // do painel de eventos (dificil de navegar até achar sob pressao, no
+                    // meio do bug acontecendo), entao agora o erro aparece direto na tela
+                    // na hora, pra so precisar de um print no momento do problema.
                     override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
                         if (message.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR) {
                             EventReporter.report(authToken, "WEBVIEW_JS_ERROR", mapOf(
@@ -193,6 +197,7 @@ fun CompanheiroWebScreen(
                                 "source" to message.sourceId(),
                                 "line" to message.lineNumber(),
                             ))
+                            android.widget.Toast.makeText(context, "Erro no app: ${message.message()}".take(200), android.widget.Toast.LENGTH_LONG).show()
                         }
                         return true
                     }
@@ -209,6 +214,7 @@ fun CompanheiroWebScreen(
                     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
                         if (request.isForMainFrame) {
                             EventReporter.report(authToken, "WEBVIEW_LOAD_ERROR", mapOf("description" to error.description?.toString(), "url" to request.url.toString()))
+                            android.widget.Toast.makeText(context, "Erro ao carregar: ${error.description}".take(200), android.widget.Toast.LENGTH_LONG).show()
                             isLoading = false
                         }
                     }
