@@ -444,6 +444,11 @@ async function enableNotifications() {
 }
 
 function reportRenderError(view, error) {
+  // console.error aqui (alem do POST pro servidor) e o que faz o app nativo
+  // Android mostrar um toast com o erro na hora -- sem isso, um erro sem
+  // tratamento nao passava pelo onConsoleMessage do WebView, so ficava
+  // guardado no servidor esperando alguem navegar ate o painel de eventos.
+  console.error(`[${view}] ${String(error?.message || error)}`);
   try { apiRequest('/api/events', { method: 'POST', body: JSON.stringify({ event_name: 'WEB_RENDER_ERROR', metadata: { view, message: String(error?.message || error), stack: String(error?.stack || '').slice(0, 500) } }) }).catch(() => {}); } catch { /* Sem conexao: segue sem reportar. */ }
 }
 function render() {
