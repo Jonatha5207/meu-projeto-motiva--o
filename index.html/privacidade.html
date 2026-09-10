@@ -12,9 +12,12 @@
   .updated { color: #6b7a71; font-size: 13px; margin-bottom: 24px; }
   ul { padding-left: 20px; }
   a { color: #1f7a4d; }
+  .back-bar { position: sticky; top: 0; z-index: 5; margin: -32px -20px 20px; padding: 14px 20px; background: rgba(247, 247, 242, .94); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); border-bottom: 1px solid #e2e2d8; }
+  .back-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; text-decoration: none; }
 </style>
 </head>
 <body>
+<div class="back-bar"><a class="back-link" href="#" onclick="if (window.history.length > 1) { history.back(); } else { window.close(); } return false;">← Voltar para o app</a></div>
 <h1>Política de Privacidade — Companheiro</h1>
 <p class="updated">Última atualização: 9 de setembro de 2026</p>
 
