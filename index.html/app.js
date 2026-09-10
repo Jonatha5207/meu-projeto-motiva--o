@@ -1292,6 +1292,16 @@ function completeSession() {
   if (data.session.rescueOpportunity && !data.session.rescued) { data.session.rescued = true; data.analytics.rescues += 1; }
   data.session.completedAt = new Date().toISOString();
   data.history.unshift({ date: currentDateLabel(), dateKey: todayKey(), activity: data.profile.activity, time: data.profile.time, status: 'COMPLETED', feeling: data.session.feeling || null, durationSeconds: data.session.actualDurationSeconds || null });
+  // Terminar o treino de verdade e o "check-in" da meta do dia/semana eram
+  // duas acoes independentes -- completar o treino nao contava pro grafico
+  // da semana a nao ser que a pessoa tambem tocasse "Fazer check-in" a
+  // parte no card do desafio. Meta de mes/ano ja usava o historico real
+  // (data.history) pra contar; agora dia/semana tambem contam sozinhos.
+  data.community.challengeJoined = true;
+  if (data.community.checkedInDate !== todayKey()) {
+    data.community.checkedInDate = todayKey();
+    data.community.challengeProgress = Math.min(7, (Number(data.community.challengeProgress) || 0) + 1);
+  }
   addMessage('app', 'Sabia que você conseguiria.');
   addMessage('app', 'Mais um treino feito. Não foi sobre vontade. Foi sobre aparecer.');
   awardPoints(40, 'treino concluído'); render();
