@@ -68,6 +68,25 @@ class MainActivity : ComponentActivity() {
     private lateinit var speechToText: SpeechToText
     private lateinit var audioPlayer: AudioPlayer
 
+    // O WebView nunca tinha o ciclo de vida dele ligado ao da Activity -- isso
+    // e uma pegadinha classica do Android: sem pausar/retomar explicitamente,
+    // voltar pro app (principalmente na aba do Mapa, que tem temporizadores JS
+    // rodando o tempo todo pro GPS/mapa) podia deixar a pagina travada, presa
+    // num estado de "pausado" que nunca voltava sozinho.
+    private var activeWebView: WebView? = null
+
+    override fun onResume() {
+        super.onResume()
+        activeWebView?.onResume()
+        activeWebView?.resumeTimers()
+    }
+
+    override fun onPause() {
+        activeWebView?.onPause()
+        activeWebView?.pauseTimers()
+        super.onPause()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tokenStore = TokenStore(applicationContext)
@@ -267,7 +286,7 @@ class MainActivity : ComponentActivity() {
                 // que a pessoa estava, scroll, etc.) nao se perde quando abre e fecha a Dana.
                 CompanheiroWebScreen(
                     authToken = token,
-                    webViewRef = { webView = it },
+                    webViewRef = { webView = it; activeWebView = it },
                     // Chamado de dentro de um @JavascriptInterface, que o Android sempre
                     // invoca numa thread de fundo -- runOnUiThread aqui e necessario de
                     // verdade (diferente do pedido de localizacao, que agora e proativo).
