@@ -554,6 +554,7 @@ function renderPickupEventChat() {
 }
 function header(title, kicker = 'COMPANHEIRO') { const initial = String(data.profile.name || 'C').trim().charAt(0).toUpperCase(); return `<div class="topline app-header"><div class="header-lead"><button class="icon-button drawer-trigger" type="button" data-open-drawer aria-label="Abrir modalidades">${icon('menu')}</button><div class="header-copy"><div class="eyebrow">${kicker}</div><h2>${title}</h2><span class="header-date">${currentDateLabel()}</span></div></div><div class="header-actions"><span class="offline-badge">${navigator.onLine ? 'online' : 'offline pronto'}</span><button class="profile-avatar" aria-label="Abrir perfil" data-view="profile">${initial}</button></div></div>`; }
 const DRAWER_CATEGORY_COLORS = { endurance: '#f1b65c', strength: '#e2793f', flow: '#d6a6d5', combat: '#e9988b', team: '#9dce77', court: '#e5d36a', urban: '#b6b7ed', direct: '#9db8a0' };
+const DRAWER_QUICK_SPORTS = ['Futebol', 'Futsal', 'Basquete', 'Vôlei', 'Tênis', 'Beach Tennis', 'Natação', 'Corrida'];
 function groupedSportCatalog() {
   const groups = new Map();
   sportCatalog.forEach(sport => {
@@ -568,12 +569,15 @@ function openSportDrawer() {
   overlay.className = 'drawer-overlay';
   const groups = groupedSportCatalog();
   const groupsHtml = [...groups.entries()].map(([tag, { slug, sports }]) => { const color = DRAWER_CATEGORY_COLORS[slug] || DRAWER_CATEGORY_COLORS.direct; return `<div class="drawer-group"><span class="drawer-group-label">${escapeHtml(tag)}</span>${sports.map(sport => `<button type="button" class="drawer-item ${sport === data.profile.activity ? 'selected' : ''}" data-drawer-sport="${escapeHtml(sport)}"><span class="drawer-item-icon" style="background:${color};color:#1a2e22">${sportIcon(sport)}</span><span>${escapeHtml(sport)}</span></button>`).join('')}</div>`; }).join('');
-  overlay.innerHTML = `<nav class="drawer-panel"><div class="drawer-header"><div><span class="eyebrow" style="color:#b9d4bf">MODALIDADES</span><strong>Escolha seu esporte</strong></div><button class="icon-button" type="button" data-drawer-close aria-label="Fechar">×</button></div><div class="drawer-search"><input type="text" class="drawer-search-input" placeholder="Buscar modalidade..." data-drawer-search /></div><div class="drawer-list">${groupsHtml}</div></nav>`;
+  const quickGridHtml = DRAWER_QUICK_SPORTS.map(sport => { const color = DRAWER_CATEGORY_COLORS[sportLayout(sport).slug] || DRAWER_CATEGORY_COLORS.direct; return `<button type="button" class="drawer-quick-item ${sport === data.profile.activity ? 'selected' : ''}" data-drawer-sport="${escapeHtml(sport)}"><span class="drawer-item-icon" style="background:${color};color:#1a2e22">${sportIcon(sport)}</span><small>${escapeHtml(sport)}</small></button>`; }).join('');
+  overlay.innerHTML = `<nav class="drawer-panel"><div class="drawer-header"><div><span class="eyebrow" style="color:#b9d4bf">MODALIDADES</span><strong>Escolha seu esporte</strong></div><button class="icon-button" type="button" data-drawer-close aria-label="Fechar">×</button></div><div class="drawer-quick-actions"><button type="button" class="drawer-action-button" data-drawer-map>🗺 Ver mapa</button><button type="button" class="drawer-action-button" data-drawer-create-event>+ ${escapeHtml(pickupEventTerms(data.profile.activity).verbCreate)}</button></div><div class="drawer-quick-grid">${quickGridHtml}</div><div class="drawer-search"><input type="text" class="drawer-search-input" placeholder="Buscar modalidade..." data-drawer-search /></div><div class="drawer-list">${groupsHtml}</div></nav>`;
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('open'));
   const close = () => { overlay.classList.remove('open'); window.setTimeout(() => overlay.remove(), 220); };
   overlay.querySelector('[data-drawer-close]').addEventListener('click', close);
   overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+  overlay.querySelector('[data-drawer-map]').addEventListener('click', () => { close(); currentView = 'map'; render(); });
+  overlay.querySelector('[data-drawer-create-event]').addEventListener('click', () => { close(); currentView = 'map'; render(); window.setTimeout(openCreatePickupEventModal, 260); });
   overlay.querySelector('[data-drawer-search]').addEventListener('input', event => {
     const query = event.currentTarget.value.trim().toLowerCase();
     overlay.querySelectorAll('.drawer-item').forEach(item => { item.hidden = !item.textContent.toLowerCase().includes(query); });

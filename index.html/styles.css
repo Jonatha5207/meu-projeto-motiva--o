@@ -498,6 +498,13 @@ body { background-image: radial-gradient(circle at 14% 8%, rgba(215, 237, 119, .
 .drawer-item-icon .sport-icon { width: 18px; height: 18px; position: relative; z-index: 1; }
 .drawer-item.selected .drawer-item-icon { box-shadow: 0 0 0 3px var(--lime), 0 3px 10px rgba(217,239,131,.55), inset 0 2px 3px rgba(255,255,255,.35); animation: drawer-icon-live 2.2s ease-in-out infinite; }
 @keyframes drawer-icon-live { 0%, 100% { box-shadow: 0 0 0 3px var(--lime), 0 3px 10px rgba(217,239,131,.4), inset 0 2px 3px rgba(255,255,255,.35); } 50% { box-shadow: 0 0 0 3px var(--lime), 0 3px 16px rgba(217,239,131,.85), inset 0 2px 3px rgba(255,255,255,.35); } }
+.drawer-quick-actions { display: flex; gap: 8px; padding: 0 18px 14px; }
+.drawer-action-button { flex: 1; min-height: 40px; border-radius: 12px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.10); color: #fff; font-size: 12px; font-weight: 700; }
+.drawer-action-button:hover { background: rgba(255,255,255,.18); }
+.drawer-quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 2px 18px 16px; border-bottom: 1px solid rgba(255,255,255,.14); margin-bottom: 6px; }
+.drawer-quick-item { display: grid; justify-items: center; gap: 6px; background: transparent; border: 0; color: rgba(255,255,255,.85); padding-bottom: 8px; }
+.drawer-quick-item small { font-size: 10px; font-weight: 600; line-height: 1.2; text-align: center; }
+.drawer-quick-item.selected .drawer-item-icon { box-shadow: 0 0 0 3px var(--lime), 0 3px 10px rgba(217,239,131,.55); animation: drawer-icon-live 2.2s ease-in-out infinite; }
 .header-actions { gap: 8px; }
 .profile-avatar { display: grid; place-items: center; width: 38px; height: 38px; min-height: 38px; border: 1px solid rgba(46, 101, 73, .15); border-radius: 13px; background: var(--brand-dark); color: var(--lime); font-size: 14px; font-weight: 800; box-shadow: 0 7px 16px rgba(23, 57, 42, .15); }
 .profile-avatar:hover { transform: translateY(-1px); background: var(--brand); }
