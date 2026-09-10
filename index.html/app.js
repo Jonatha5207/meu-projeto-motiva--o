@@ -49,7 +49,7 @@ const initialData = {
   history: [],
   memory: { objections: {}, lastObjection: null, lastIntent: null },
   analytics: { rescueOpportunities: 0, rescues: 0, events: [] },
-  community: { requests: [], ratings: {}, checkedInDate: null, challengeJoined: false, challengeProgress: 0, goalPeriod: 'week', people: [], connections: [], pulses: [], messages: {}, activeChat: null, pickupEventMessages: {}, activePickupEventChat: null, posts: [
+  community: { requests: [], ratings: {}, checkedInDate: null, challengeJoined: false, challengeProgress: 0, goalPeriod: 'week', people: [], connections: [], pulses: [], messages: {}, activeChat: null, pickupEventMessages: {}, activePickupEventChat: null, teamSplits: {}, posts: [
     { id: 'post-1', author: 'Marina', activity: 'Corrida', text: 'Completei meus primeiros 5 km do mês. Um passo de cada vez.', likes: 24, liked: false, comments: 5, minutes: 18 },
     { id: 'post-2', author: 'Rafael', activity: 'Academia', text: 'Treino curto hoje, mas apareci. Constancia vence a perfeicao.', likes: 16, liked: false, comments: 3, minutes: 42 },
     { id: 'post-3', author: 'Bianca', activity: 'Yoga', text: 'Respirar, alongar e voltar para o presente.', likes: 31, liked: false, comments: 7, minutes: 65 }
@@ -838,7 +838,7 @@ function renderPickupEventCard(event) {
   const actionLabel = isCreator ? `Cancelar ${terms.noun}` : event.joined ? `Sair do ${terms.noun}` : full ? 'Lotado' : 'Participar';
   const missing = event.max_spots - event.spots_taken;
   const spotsLabel = full ? `${event.spots_taken}/${event.max_spots} ${terms.people}` : `Faltam ${missing} ${terms.people}`;
-  return `<article class="card pickup-event-card"><div class="pickup-event-head"><div class="meeting-point-icon">${sportIcon(event.activity)}</div><div><h3>${escapeHtml(event.title)}</h3><p class="small">${escapeHtml(event.location_name)}</p></div><span class="status-pill ${full ? 'status-neutral' : 'status-active'}">${spotsLabel}</span></div><div class="pickup-event-meta"><span>📅 ${formatEventDateTime(event.scheduled_at)}</span><span>⏱ ${event.duration_minutes} min</span><span>💰 ${formatEventPrice(event.price_cents)}</span></div>${event.participants.length ? `<div class="pickup-event-participants">${avatars}${extra}</div>` : ''}<div class="pickup-event-actions"><button class="${isCreator || event.joined ? 'secondary' : 'primary'} pickup-event-button" data-pickup-event="${event.id}" data-joined="${event.joined}" data-creator="${isCreator}" ${full && !event.joined ? 'disabled' : ''}>${actionLabel}</button>${isCreator || event.joined ? `<button class="secondary pickup-event-chat-button" data-open-pickup-chat="${event.id}">💬 Conversar</button>` : ''}</div></article>`;
+  return `<article class="card pickup-event-card"><div class="pickup-event-head"><div class="meeting-point-icon">${sportIcon(event.activity)}</div><div><h3>${escapeHtml(event.title)}</h3><p class="small">${escapeHtml(event.location_name)}</p></div><span class="status-pill ${full ? 'status-neutral' : 'status-active'}">${spotsLabel}</span></div><div class="pickup-event-meta"><span>📅 ${formatEventDateTime(event.scheduled_at)}</span><span>⏱ ${event.duration_minutes} min</span><span>💰 ${formatEventPrice(event.price_cents)}</span></div>${event.participants.length ? `<div class="pickup-event-participants">${avatars}${extra}</div>` : ''}<div class="pickup-event-actions"><button class="${isCreator || event.joined ? 'secondary' : 'primary'} pickup-event-button" data-pickup-event="${event.id}" data-joined="${event.joined}" data-creator="${isCreator}" ${full && !event.joined ? 'disabled' : ''}>${actionLabel}</button>${isCreator || event.joined ? `<button class="secondary pickup-event-chat-button" data-open-pickup-chat="${event.id}">💬 Conversar</button>` : ''}${(isCreator || event.joined) && sportLayout(event.activity).slug === 'team' ? `<button class="secondary pickup-team-button" data-organize-team="${event.id}">🎲 Times</button>` : ''}</div></article>`;
 }
 function pickupEventTerms(activity) {
   const isTeam = sportLayout(activity).slug === 'team';
@@ -1449,6 +1449,51 @@ function openJoinSuccessModal(event) {
   overlay.addEventListener('click', evt => { if (evt.target === overlay) close(); });
   overlay.querySelector('[data-join-open-chat]').addEventListener('click', () => { close(); openPickupEventChat(event.id); });
 }
+function shuffleTeams(participants) {
+  const shuffled = [...participants];
+  for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
+  const mid = Math.ceil(shuffled.length / 2);
+  return { teamA: shuffled.slice(0, mid), teamB: shuffled.slice(mid) };
+}
+function renderTeamColumns(split) {
+  if (!split) return '<p class="small">Toque em "Sortear times" para dividir o grupo.</p>';
+  const column = (label, team, className) => `<div class="team-column ${className}"><strong>${label}</strong>${team.map(person => `<span class="team-member-chip">${escapeHtml(person.name)}</span>`).join('') || '<span class="small">Vazio</span>'}</div>`;
+  return `<div class="team-columns">${column('Time A', split.teamA, 'team-column-a')}${column('Time B', split.teamB, 'team-column-b')}</div>`;
+}
+function openTeamOrganizerModal(event) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const existing = data.community.teamSplits[event.id];
+  overlay.innerHTML = `<div class="modal-sheet team-organizer-sheet" role="dialog" aria-modal="true" aria-label="Organizar times">
+    <h3>Organizar times</h3>
+    <p class="small">${event.participants.length} confirmados. O sorteio fica salvo neste aparelho; toque em "Enviar para o chat" para todo mundo ver.</p>
+    <div data-team-columns>${renderTeamColumns(existing)}</div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" data-shuffle-teams>🎲 Sortear times</button>
+      <button type="button" class="primary" data-send-teams-chat ${existing ? '' : 'disabled'}>Enviar para o chat</button>
+    </div>
+    <button type="button" class="text-action" data-close-team-modal>Fechar</button>
+  </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('[data-close-team-modal]').addEventListener('click', close);
+  overlay.addEventListener('click', evt => { if (evt.target === overlay) close(); });
+  overlay.querySelector('[data-shuffle-teams]').addEventListener('click', () => {
+    const split = shuffleTeams(event.participants);
+    data.community.teamSplits[event.id] = { ...split, generatedAt: Date.now() };
+    save();
+    overlay.querySelector('[data-team-columns]').innerHTML = renderTeamColumns(split);
+    overlay.querySelector('[data-send-teams-chat]').disabled = false;
+  });
+  overlay.querySelector('[data-send-teams-chat]').addEventListener('click', () => {
+    const split = data.community.teamSplits[event.id];
+    if (!split) return;
+    const text = `🎲 Times sorteados:\nTime A: ${split.teamA.map(p => p.name).join(', ') || '-'}\nTime B: ${split.teamB.map(p => p.name).join(', ') || '-'}`;
+    sendPickupEventMessage(event.id, text);
+    close();
+    toast('Times enviados para o chat do jogo');
+  });
+}
 function bindEvents() {
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { currentView = button.dataset.view; render(); }));
   document.querySelector('#post-form')?.addEventListener('submit', async event => {
@@ -1549,6 +1594,7 @@ function bindEvents() {
   document.querySelectorAll('[data-open-chat]').forEach(button => button.addEventListener('click', () => openConnectionChat(button.dataset.openChat)));
   document.querySelector('#connection-chat-form')?.addEventListener('submit', event => { event.preventDefault(); const input = document.querySelector('#connection-chat-input'); const text = input?.value.trim(); if (!text) return; input.value = ''; sendConnectionMessage(data.community.activeChat, text); });
   document.querySelectorAll('[data-open-pickup-chat]').forEach(button => button.addEventListener('click', () => openPickupEventChat(button.dataset.openPickupChat)));
+  document.querySelectorAll('[data-organize-team]').forEach(button => button.addEventListener('click', () => { const event = pickupEvents.find(item => item.id === button.dataset.organizeTeam); if (event) openTeamOrganizerModal(event); }));
   document.querySelector('#pickup-event-chat-form')?.addEventListener('submit', event => { event.preventDefault(); const input = document.querySelector('#pickup-event-chat-input'); const text = input?.value.trim(); if (!text) return; input.value = ''; sendPickupEventMessage(data.community.activePickupEventChat, text); });
   document.querySelectorAll('[data-feedback]').forEach(button => button.addEventListener('click', () => { data.session.feeling = button.dataset.feedback; save(); syncFeedbackToBackend({ completed: true, feeling: data.session.feeling }); const status = document.querySelector('[data-feedback-status]'); if (status) status.textContent = `Sensação registrada: ${button.dataset.feedback}`; toast('Feedback salvo'); }));
   document.querySelectorAll('[data-not-completed-reason]').forEach(button => button.addEventListener('click', () => { data.session.reasonNotCompleted = button.dataset.notCompletedReason; save(); syncFeedbackToBackend({ completed: false, reason_not_completed: data.session.reasonNotCompleted }); const status = document.querySelector('[data-reason-status]'); if (status) status.textContent = `Motivo registrado: ${button.dataset.notCompletedReason}`; toast('Motivo salvo sem julgamento'); }));
