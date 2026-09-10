@@ -14,9 +14,23 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.companheiro.dana.ble.HeartRateMonitor
@@ -89,6 +103,13 @@ fun CompanheiroWebScreen(
     webViewRef: (WebView) -> Unit = {},
     onNeedsBluetoothPermission: () -> Unit = {},
 ) {
+    // O servidor roda no plano gratuito do Render, que "adormece" depois de uns
+    // minutos sem uso -- a primeira requisicao depois disso pode demorar 30-60s
+    // pra responder. Sem esse indicador, isso parecia a tela travando (fundo
+    // branco parado, sem nenhum feedback de que algo ainda estava carregando).
+    var isLoading by remember { mutableStateOf(true) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context ->
@@ -138,13 +159,19 @@ fun CompanheiroWebScreen(
                         return tryLaunchExternally(context, request.url.toString())
                     }
 
+                    override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                        isLoading = true
+                    }
+
                     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
                         if (request.isForMainFrame) {
                             EventReporter.report(authToken, "WEBVIEW_LOAD_ERROR", mapOf("description" to error.description?.toString(), "url" to request.url.toString()))
+                            isLoading = false
                         }
                     }
 
                     override fun onPageFinished(view: WebView, url: String?) {
+                        isLoading = false
                         if (authToken != null) {
                             val encodedToken = JSONObject.quote(authToken)
                             view.evaluateJavascript(
@@ -166,4 +193,22 @@ fun CompanheiroWebScreen(
             }
         },
     )
+    if (isLoading) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator()
+                Text(
+                    "Conectando ao Companheiro...\nSe for a primeira vez em um tempo, pode levar até 1 minuto.",
+                    modifier = Modifier.padding(top = 16.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
+    }
 }
