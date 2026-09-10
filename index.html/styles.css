@@ -363,13 +363,12 @@ h3 { font-size: 16px; font-weight: 700; }
 .meeting-point-icon { display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; border-radius: 14px; background: var(--sport-wash); color: var(--tint-ink); font-size: 20px; }
 .post-avatar .sport-icon, .activity-mark .sport-icon { width: 20px; height: 20px; }
 .sport-choice-icon .sport-icon { width: 15px; height: 15px; }
-.map-safety { display: flex; align-items: flex-start; gap: 10px; margin-top: 18px; padding: 14px 15px; border-radius: 16px; background: var(--sage); color: var(--green-dark); font-size: 13px; }
-.map-safety .safety-mark { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--brand); color: white; font-size: 12px; font-weight: 800; }
-.map-safety p { margin-top: 2px; color: var(--green-dark); font-size: 12px; line-height: 1.4; opacity: .85; }
-.live-location-card { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 14px; }
-.live-location-copy { flex: 1; min-width: 0; display: grid; gap: 3px; }
-.live-location-card button { flex: 0 0 auto; min-height: 44px; padding: 0 18px; }
+.map-toolbar { display: flex; gap: 8px; margin: 16px 0 4px; }
+.map-toolbar-button { flex: 1; min-height: 44px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--green-dark); font-size: 12.5px; font-weight: 700; }
+.map-toolbar-button.active { background: var(--lime); border-color: transparent; }
+.map-safety-note { margin: 10px 0 4px; color: var(--muted); font-size: 11px; text-align: center; }
 #meeting-map, #live-map { height: 300px; margin: 18px 0; border-radius: 20px; overflow: hidden; z-index: 1; background: #dce9dc; }
+#meeting-map.map-hero { height: min(56vh, 460px); margin: 4px 0 0; border-radius: 24px; }
 .location-picker-sheet { width: min(100%, 480px); height: min(88vh, 640px); display: flex; flex-direction: column; border-radius: 24px 24px 0 0; background: var(--card); color: var(--ink); box-shadow: 0 -18px 48px rgba(0, 0, 0, .22); animation: modal-sheet-up .25s cubic-bezier(.2, .8, .3, 1); overflow: hidden; }
 .location-picker-head { padding: 18px 20px 12px; }
 .location-picker-head h3 { font-size: 19px; letter-spacing: -.03em; }
