@@ -83,6 +83,7 @@ h3 { font-size: 16px; font-weight: 700; }
 .login-form { margin-top: 28px; }
 .login-form .field-label { margin-top: 16px; }
 .login-form .primary { width: 100%; margin-top: 23px; }
+.login-tagline { margin-top: 18px; color: var(--green-dark); font-size: 13.5px; font-weight: 700; text-align: center; }
 .login-note { margin-top: auto; padding-top: 30px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .summary-screen { display: flex; flex-direction: column; }
 .summary-hero { margin-top: 12vh; }
