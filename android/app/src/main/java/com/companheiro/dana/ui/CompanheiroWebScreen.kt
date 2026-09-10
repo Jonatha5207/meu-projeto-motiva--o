@@ -97,8 +97,33 @@ private class DanaBluetoothBridge(
 // Links como Waze/Google Maps abrem com esquemas tipo "intent://" ou "geo:" --
 // um WebView normal nao sabe navegar pra isso e mostra ERR_UNKNOWN_URL_SCHEME.
 // Aqui a gente detecta esses casos e pede pro proprio Android abrir o app certo.
+//
+// Os botoes "Ir de Waze" / "Ir de Google Maps" do site, porem, usam links
+// https normais (waze.com/ul, google.com/maps) -- esses NAO caem no caso
+// acima, entao o WebView carregava o proprio Waze/Google Maps (site pesado,
+// sem "voltar" que funcione direito) por cima do app, e travava quando a
+// pessoa tentava sair de la e voltar pro Companheiro. Aqui a gente detecta
+// especificamente esses hosts de mapa e manda pro Android abrir o app de
+// navegacao de verdade (ou o navegador), em vez de deixar o WebView navegar.
+private fun isExternalMapLink(uri: Uri): Boolean {
+    val host = uri.host?.lowercase() ?: return false
+    if (host == "waze.com" || host.endsWith(".waze.com")) return true
+    if ((host == "google.com" || host.endsWith(".google.com")) && uri.path?.startsWith("/maps") == true) return true
+    if (host == "goo.gl" || host.endsWith(".goo.gl")) return true
+    return false
+}
+
 private fun tryLaunchExternally(context: Context, url: String): Boolean {
-    if (url.startsWith("http://") || url.startsWith("https://")) return false
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+        val uri = Uri.parse(url)
+        if (!isExternalMapLink(uri)) return false
+        return try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (e: Exception) {
+            true
+        }
+    }
     return try {
         val intent = if (url.startsWith("intent://")) Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
         else Intent(Intent.ACTION_VIEW, Uri.parse(url))
