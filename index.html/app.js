@@ -1421,14 +1421,33 @@ function openLocationPickerModal() {
     }, 30);
   });
 }
-function showHeartBurst(rect) {
+function showHeartBurst(rect, emoji = '❤️') {
   const heart = document.createElement('div');
   heart.className = 'heart-burst';
-  heart.textContent = '❤️';
+  heart.textContent = emoji;
   heart.style.left = `${rect.left + rect.width / 2}px`;
   heart.style.top = `${rect.top + rect.height / 2}px`;
   document.body.appendChild(heart);
   heart.addEventListener('animationend', () => heart.remove());
+}
+function openJoinSuccessModal(event) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const terms = pickupEventTerms(event.activity);
+  overlay.innerHTML = `<div class="modal-sheet join-success-sheet" role="dialog" aria-modal="true" aria-label="Você entrou">
+    <div class="join-success-check">${sportIcon(event.activity)}</div>
+    <h3>Você está dentro!</h3>
+    <p class="small">${escapeHtml(event.title)} · ${escapeHtml(event.location_name)}<br>${formatEventDateTime(event.scheduled_at)}</p>
+    <div class="join-success-actions">
+      <button type="button" class="primary" data-join-open-chat>💬 Abrir conversa do ${terms.noun}</button>
+      <button type="button" class="secondary" data-join-close>Fechar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('[data-join-close]').addEventListener('click', close);
+  overlay.addEventListener('click', evt => { if (evt.target === overlay) close(); });
+  overlay.querySelector('[data-join-open-chat]').addEventListener('click', () => { close(); openPickupEventChat(event.id); });
 }
 function bindEvents() {
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => { currentView = button.dataset.view; render(); }));
@@ -1565,7 +1584,7 @@ function bindEvents() {
     try {
       if (isCreator) { await apiRequest(`/api/pickup-events/${id}`, { method: 'DELETE' }); toast('Encontro cancelado'); }
       else if (joined) { await apiRequest(`/api/pickup-events/${id}/join`, { method: 'DELETE' }); toast('Você saiu'); }
-      else { await apiRequest(`/api/pickup-events/${id}/join`, { method: 'POST' }); toast('Você entrou!'); }
+      else { const updated = await apiRequest(`/api/pickup-events/${id}/join`, { method: 'POST' }); showHeartBurst(button.getBoundingClientRect(), '✅'); openJoinSuccessModal(updated); }
       await loadPickupEvents();
     } catch { toast('Não foi possível agora'); button.disabled = false; }
   }));
