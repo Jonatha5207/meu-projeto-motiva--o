@@ -673,7 +673,7 @@ function sportIcon(activity = data.profile.activity) {
 function sportKey(activity = data.profile.activity) { return String(activity).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-'); }
 function historyItemForDay(date) {
   const key = todayKey(date);
-  return data.history.find(item => item.dateKey === key || item.date === key);
+  return data.history.find(item => (item.dateKey === key || item.date === key) && item.activity === data.profile.activity);
 }
 function renderWeeklyChart() {
   const labels = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'];
@@ -1264,7 +1264,8 @@ function renderCustomizeV2() {
 
 
 function renderHistoryV2() {
-  const items = data.history.length ? data.history : [{ date: 'Hoje', activity: data.profile.activity, status: 'PENDING', reason: 'Seu primeiro registro aparece aqui.' }];
+  const historyForActivity = data.history.filter(item => item.activity === data.profile.activity);
+  const items = historyForActivity.length ? historyForActivity : [{ date: 'Hoje', activity: data.profile.activity, status: 'PENDING', reason: 'Seu primeiro registro aparece aqui.' }];
   const labels = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM'];
   const monday = new Date();
   const currentDay = monday.getDay() || 7;
