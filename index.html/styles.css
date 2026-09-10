@@ -148,6 +148,8 @@ h3 { font-size: 16px; font-weight: 700; }
 .trust-badge, .person-badge { display: inline-flex; width: fit-content; border-radius: 20px; padding: 5px 8px; background: var(--sage); color: var(--green); font-size: 10px; font-weight: 700; }
 .person-badge { margin-top: 9px; }
 .partner-button { width: 100%; min-height: 40px; margin-top: 12px; font-size: 12px; }
+.partner-chat-button { border: 0; background: var(--lime); color: var(--green-dark); font-weight: 800; box-shadow: 0 8px 18px rgba(217, 239, 131, .35); }
+.partner-chat-button:hover { background: #cbe562; }
 .request-card { align-items: center; }
 .request-actions { display: flex; gap: 8px; margin-top: 10px; }
 .request-actions button { flex: 1; min-height: 38px; font-size: 12px; }
