@@ -14,12 +14,22 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -30,9 +40,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.companheiro.dana.R
 import com.companheiro.dana.ble.HeartRateMonitor
 import com.companheiro.dana.network.EventReporter
 import org.json.JSONObject
@@ -194,18 +208,52 @@ fun CompanheiroWebScreen(
         },
     )
     if (isLoading) {
+        val pulse = rememberInfiniteTransition(label = "loading-pulse")
+        val scale by pulse.animateFloat(
+            initialValue = 0.9f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(animation = tween(900, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+            label = "scale",
+        )
+        val glowAlpha by pulse.animateFloat(
+            initialValue = 0.25f,
+            targetValue = 0.55f,
+            animationSpec = infiniteRepeatable(animation = tween(900, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+            label = "glow",
+        )
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(
                 modifier = Modifier.fillMaxSize().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                CircularProgressIndicator()
+                Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(120.dp)
+                            .graphicsLayer { scaleX = scale * 1.15f; scaleY = scale * 1.15f; alpha = glowAlpha }
+                            .background(MaterialTheme.colorScheme.primary, shape = androidx.compose.foundation.shape.CircleShape),
+                    )
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(88.dp)
+                            .graphicsLayer { scaleX = scale; scaleY = scale }
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(24.dp)),
+                    )
+                }
                 Text(
-                    "Conectando ao Companheiro...\nSe for a primeira vez em um tempo, pode levar até 1 minuto.",
-                    modifier = Modifier.padding(top = 16.dp),
+                    "Chamando a Dana...",
+                    modifier = Modifier.padding(top = 20.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    "Pode levar até 1 minuto na primeira vez em um tempo.",
+                    modifier = Modifier.padding(top = 4.dp),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 )
             }
         }
