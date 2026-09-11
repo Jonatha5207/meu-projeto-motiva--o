@@ -400,6 +400,10 @@ h3 { font-size: 16px; font-weight: 700; }
 .meeting-point-icon { display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; border-radius: 14px; background: var(--sport-wash); color: var(--tint-ink); font-size: 20px; }
 .post-avatar .sport-icon, .activity-mark .sport-icon { width: 20px; height: 20px; }
 .sport-choice-icon .sport-icon { width: 15px; height: 15px; }
+.map-sport-chips { display: flex; gap: 8px; overflow-x: auto; margin: 14px 0 2px; padding-bottom: 4px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent); }
+.map-sport-chips::-webkit-scrollbar { display: none; }
+.map-sport-chip { flex: 0 0 auto; min-height: 36px; padding: 0 15px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--green-dark); font-size: 12.5px; font-weight: 700; }
+.map-sport-chip.selected { background: var(--brand-dark); border-color: transparent; color: var(--lime); }
 .map-toolbar { display: flex; gap: 8px; margin: 16px 0 4px; }
 .map-toolbar-button { flex: 1; min-height: 44px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--green-dark); font-size: 12.5px; font-weight: 700; }
 .map-toolbar-button.active { background: var(--lime); border-color: transparent; }
