@@ -193,6 +193,31 @@ export function createCommunityService({ store, notificationService }) {
       return decoratePickupEvent(store, event, userId);
     },
 
+    // Convite compartilhado no WhatsApp precisa ser aberto por quem AINDA nao
+    // tem conta -- e esse e justamente o publico do convite. Devolve so o que
+    // e necessario pro card do convite (o que, onde, quando, quantas vagas),
+    // sem nome de participante, sem quem criou, sem id de usuario nenhum. O
+    // link em si (uuid) e o segredo.
+    async getPublicPickupEvent(eventId) {
+      const event = await store.getPickupEvent(eventId);
+      if (!event) throw notFound('pickup_event_not_found');
+      const participants = await store.listPickupEventParticipants(eventId);
+      return {
+        id: event.id,
+        activity: event.activity,
+        title: event.title,
+        location_name: event.location_name,
+        scheduled_at: event.scheduled_at,
+        duration_minutes: event.duration_minutes,
+        price_cents: event.price_cents,
+        max_spots: event.max_spots,
+        spots_taken: participants.length,
+        participants: [],
+        joined: false,
+        creator_id: null,
+      };
+    },
+
     async listPickupEvents(userId) {
       const events = await store.listUpcomingPickupEvents();
       return Promise.all(events.map(event => decoratePickupEvent(store, event, userId)));

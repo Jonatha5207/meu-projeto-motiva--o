@@ -100,6 +100,25 @@ data.session.journey = data.session.journey || {};
 data.session.confirmed = Boolean(data.session.confirmed);
 let currentView = data.onboarded ? 'home' : 'onboarding';
 if (data.authenticated && location.hash === '#chat') currentView = 'chat';
+// Link de convite (#jogo=<id>), vindo do WhatsApp de alguem que marcou um jogo.
+// Guardado aqui e so aberto depois que o app terminar de carregar/entrar --
+// quem clica pode ser alguem que nunca usou o app e ainda vai passar pelo
+// cadastro/onboarding inteiro antes de conseguir ver o jogo.
+//
+// Fica em sessionStorage, e nao so numa variavel, porque a pagina RECARREGA
+// sozinha logo depois de abrir em dois casos muito comuns justamente pra quem
+// chega pelo convite: na primeira visita, quando o service worker assume o
+// controle (ver controllerchange em index.html), e no app nativo, que
+// recarrega pra injetar o login. Nos dois casos o convite se perdia no meio
+// do caminho e a pessoa caia na tela inicial sem entender por que clicou.
+const INVITE_KEY = 'companheiro-convite-jogo';
+function readInviteFromLocation() {
+  const fromHash = (location.hash.match(/^#jogo=([\w-]+)$/) || [])[1];
+  if (fromHash) { try { sessionStorage.setItem(INVITE_KEY, fromHash); } catch { /* modo privado */ } return fromHash; }
+  try { return sessionStorage.getItem(INVITE_KEY); } catch { return null; }
+}
+function clearStoredInvite() { try { sessionStorage.removeItem(INVITE_KEY); } catch { /* modo privado */ } }
+let pendingEventInvite = readInviteFromLocation();
 let onboardingStep = 0;
 let notificationTimers = [];
 let currentMotivation;
@@ -476,6 +495,11 @@ function render() {
 }
 function renderInner() {
   applyCustomization();
+  // Fica aqui, antes dos desvios de login/onboarding, porque quem chega pelo
+  // link de convite quase sempre ainda nao tem conta -- e nesses casos o
+  // render sai mais cedo, por outro caminho. resolvePendingEventInvite zera o
+  // pendente logo na entrada, entao roda uma vez so mesmo sendo chamado aqui.
+  if (pendingEventInvite) window.setTimeout(resolvePendingEventInvite, 0);
   connectSocialRealtime();
   if (data.profile.notificationsEnabled) scheduleTrainingNotifications(); else clearNotificationTimers();
   if (!data.authenticated) {
@@ -889,7 +913,7 @@ function renderPickupEventCard(event) {
   const isCreator = event.creator_id === data.userId;
   const actionLabel = isCreator ? `Cancelar ${terms.noun}` : event.joined ? `Sair do ${terms.noun}` : full ? 'Lotado' : 'Participar';
   const timing = relativeEventTime(event.scheduled_at);
-  return `<article class="card pickup-event-card"><div class="pickup-event-head"><div class="meeting-point-icon">${sportIcon(event.activity)}</div><div><h3>${escapeHtml(event.title)}</h3><p class="small">${escapeHtml(event.location_name)}</p></div><span class="status-pill ${timing.urgent ? 'status-active' : 'status-neutral'}">${escapeHtml(timing.label)}</span></div>${renderPickupSpotsBlock(event, terms)}<div class="pickup-event-meta"><span>📅 ${formatEventDateTime(event.scheduled_at)}</span><span>⏱ ${event.duration_minutes} min</span><span>💰 ${formatEventPrice(event.price_cents)}</span></div>${event.participants.length ? `<div class="pickup-event-participants">${avatars}${extra}</div>` : ''}<div class="pickup-event-actions"><button class="${isCreator || event.joined ? 'secondary' : 'primary'} pickup-event-button" data-pickup-event="${event.id}" data-joined="${event.joined}" data-creator="${isCreator}" ${full && !event.joined ? 'disabled' : ''}>${actionLabel}</button>${isCreator || event.joined ? `<button class="secondary pickup-event-chat-button" data-open-pickup-chat="${event.id}">💬 Conversar</button>` : ''}${(isCreator || event.joined) && sportLayout(event.activity).slug === 'team' ? `<button class="secondary pickup-team-button" data-organize-team="${event.id}">🎲 Times</button>` : ''}</div></article>`;
+  return `<article class="card pickup-event-card"><div class="pickup-event-head"><div class="meeting-point-icon">${sportIcon(event.activity)}</div><div><h3>${escapeHtml(event.title)}</h3><p class="small">${escapeHtml(event.location_name)}</p></div><span class="status-pill ${timing.urgent ? 'status-active' : 'status-neutral'}">${escapeHtml(timing.label)}</span></div>${renderPickupSpotsBlock(event, terms)}<div class="pickup-event-meta"><span>📅 ${formatEventDateTime(event.scheduled_at)}</span><span>⏱ ${event.duration_minutes} min</span><span>💰 ${formatEventPrice(event.price_cents)}</span></div>${event.participants.length ? `<div class="pickup-event-participants">${avatars}${extra}</div>` : ''}<div class="pickup-event-actions"><button class="${isCreator || event.joined ? 'secondary' : 'primary'} pickup-event-button" data-pickup-event="${event.id}" data-joined="${event.joined}" data-creator="${isCreator}" ${full && !event.joined ? 'disabled' : ''}>${actionLabel}</button>${isCreator || event.joined ? `<button class="secondary pickup-event-chat-button" data-open-pickup-chat="${event.id}">💬 Conversar</button>` : ''}${(isCreator || event.joined) && !full ? `<button class="secondary pickup-invite-button" data-invite-pickup="${event.id}">Chamar no WhatsApp</button>` : ''}${(isCreator || event.joined) && sportLayout(event.activity).slug === 'team' ? `<button class="secondary pickup-team-button" data-organize-team="${event.id}">🎲 Times</button>` : ''}</div></article>`;
 }
 function pickupEventTerms(activity) {
   const isTeam = sportLayout(activity).slug === 'team';
@@ -1572,6 +1596,98 @@ function openJoinSuccessModal(event) {
   overlay.addEventListener('click', evt => { if (evt.target === overlay) close(); });
   overlay.querySelector('[data-join-open-chat]').addEventListener('click', () => { close(); openPickupEventChat(event.id); });
 }
+// Abre o jogo que veio pelo link de convite. Sem isso o convite cai na tela
+// inicial e a pessoa tem que cacar o jogo sozinha no mapa -- que e onde a
+// maioria desiste.
+// Clicar no link com o app JA aberto so troca o "#" da URL, sem recarregar a
+// pagina -- sem isso o convite era simplesmente ignorado nesse caso (que e o
+// mais comum: a pessoa ja tem o app e clica no link do grupo do WhatsApp).
+window.addEventListener('hashchange', () => {
+  const id = (location.hash.match(/^#jogo=([\w-]+)$/) || [])[1];
+  if (!id) return;
+  pendingEventInvite = id;
+  if (data.onboarded) resolvePendingEventInvite();
+});
+async function resolvePendingEventInvite() {
+  if (!pendingEventInvite) return;
+  const id = pendingEventInvite;
+  pendingEventInvite = null;
+  if (location.hash.startsWith('#jogo=')) history.replaceState(null, '', location.pathname + location.search);
+  if (data.authenticated && !pickupEvents.length) await loadPickupEvents();
+  let event = pickupEvents.find(item => item.id === id);
+  // Sem conta, a listagem responde 401 -- e quem chega pelo convite quase
+  // sempre ainda nao tem conta. A rota publica existe exatamente pra isso.
+  if (!event) {
+    try { event = await apiRequest(`/api/pickup-events/${id}/public`); } catch { event = null; }
+  }
+  if (!event) { toast('Esse jogo não está mais disponível'); return; }
+  // Quem ainda esta criando conta/fazendo onboarding NAO pode ser arrancado
+  // do fluxo -- o convite aparece por cima de onde a pessoa estiver, mostrando
+  // logo de cara o jogo que ela veio ver (e o motivo dela terminar o cadastro).
+  if (data.onboarded) { currentView = 'map'; render(); }
+  openEventInviteModal(event);
+}
+function openEventInviteModal(event) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const terms = pickupEventTerms(event.activity);
+  const timing = relativeEventTime(event.scheduled_at);
+  const full = event.spots_taken >= event.max_spots;
+  const canJoin = data.authenticated && !event.joined && !full;
+  const actionButton = event.joined
+    ? '<button type="button" class="secondary" data-invite-close>Você já está confirmado</button>'
+    : full
+      ? '<button type="button" class="secondary" disabled>Lotado</button>'
+      : data.authenticated
+        ? `<button type="button" class="primary" data-invite-join="${event.id}">Participar do ${terms.noun}</button>`
+        : '<button type="button" class="primary" data-invite-signup>Criar minha conta para participar</button>';
+  overlay.innerHTML = `<div class="modal-sheet invite-sheet" role="dialog" aria-modal="true" aria-label="Convite para ${escapeHtml(terms.noun)}">
+    <div class="modal-header-row"><h3>Você foi convidado</h3><button class="icon-button" type="button" data-invite-close aria-label="Fechar">×</button></div>
+    <div class="invite-head"><div class="meeting-point-icon invite-icon">${sportIcon(event.activity)}</div><div><strong>${escapeHtml(event.title)}</strong><p class="small">${escapeHtml(event.location_name)}</p><p class="small invite-when">${escapeHtml(timing.label)}</p></div></div>
+    ${renderPickupSpotsBlock(event, terms)}
+    <div class="pickup-event-meta"><span>⏱ ${event.duration_minutes} min</span><span>💰 ${formatEventPrice(event.price_cents)}</span></div>
+    <div class="invite-actions">${actionButton}</div>
+  </div>`;
+  document.body.appendChild(overlay);
+  // So limpa o convite guardado quando a pessoa realmente resolve o que fazer
+  // com ele -- assim um recarregamento da pagina no meio do caminho nao perde
+  // o convite, mas depois de fechar ele nao volta a aparecer sozinho.
+  const close = () => { clearStoredInvite(); overlay.remove(); };
+  overlay.querySelectorAll('[data-invite-close]').forEach(button => button.addEventListener('click', close));
+  overlay.addEventListener('click', evt => { if (evt.target === overlay) close(); });
+  overlay.querySelector('[data-invite-signup]')?.addEventListener('click', () => { close(); currentView = 'login'; render(); toast('Crie sua conta e o jogo te espera no Mapa'); });
+  overlay.querySelector('[data-invite-join]')?.addEventListener('click', async button => {
+    const target = overlay.querySelector('[data-invite-join]');
+    target.disabled = true;
+    try {
+      const updated = await apiRequest(`/api/pickup-events/${event.id}/join`, { method: 'POST' });
+      clearStoredInvite();
+      close();
+      openJoinSuccessModal(updated);
+      await loadPickupEvents();
+      render();
+    } catch { toast('Não foi possível entrar agora'); target.disabled = false; }
+  });
+}
+// window.open pode ser ignorado em silencio dentro do WebView do Android
+// (depende de multiplas janelas estarem habilitadas, e nao estao). Quando isso
+// acontece ele devolve null -- entao cai pra navegacao direta, que sempre
+// passa pelo shouldOverrideUrlLoading do app nativo e abre o app certo por
+// Intent. No navegador comum o window.open ja resolve na primeira tentativa.
+function openExternalLink(url) {
+  let opened = null;
+  try { opened = window.open(url, '_blank', 'noopener'); } catch { opened = null; }
+  if (!opened) location.href = url;
+}
+function invitePickupEventToWhatsApp(event) {
+  const terms = pickupEventTerms(event.activity);
+  const timing = relativeEventTime(event.scheduled_at);
+  const missing = Math.max(0, (Number(event.max_spots) || 0) - (Number(event.spots_taken) || 0));
+  const link = `${location.origin}${location.pathname}#jogo=${event.id}`;
+  const hook = missing > 0 ? `Faltam ${missing} ${missing === 1 ? terms.people.replace(/e?s$/, '') : terms.people}!` : 'Bora?';
+  const text = `${sportIcon(event.activity)} ${event.title}\n📍 ${event.location_name}\n🕒 ${timing.label}\n\n${hook}\n\nEntra por aqui: ${link}`;
+  openExternalLink(`https://wa.me/?text=${encodeURIComponent(text)}`);
+}
 function shuffleTeams(participants, activity) {
   const shuffled = [...participants];
   for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
@@ -1745,6 +1861,7 @@ function bindEvents() {
   document.querySelector('#connection-chat-form')?.addEventListener('submit', event => { event.preventDefault(); const input = document.querySelector('#connection-chat-input'); const text = input?.value.trim(); if (!text) return; input.value = ''; sendConnectionMessage(data.community.activeChat, text); });
   document.querySelectorAll('[data-open-pickup-chat]').forEach(button => button.addEventListener('click', () => openPickupEventChat(button.dataset.openPickupChat)));
   document.querySelectorAll('[data-organize-team]').forEach(button => button.addEventListener('click', () => { const event = pickupEvents.find(item => item.id === button.dataset.organizeTeam); if (event) openTeamOrganizerModal(event); }));
+  document.querySelectorAll('[data-invite-pickup]').forEach(button => button.addEventListener('click', () => { const event = pickupEvents.find(item => item.id === button.dataset.invitePickup); if (event) invitePickupEventToWhatsApp(event); }));
   document.querySelector('#pickup-event-chat-form')?.addEventListener('submit', event => { event.preventDefault(); const input = document.querySelector('#pickup-event-chat-input'); const text = input?.value.trim(); if (!text) return; input.value = ''; sendPickupEventMessage(data.community.activePickupEventChat, text); });
   document.querySelectorAll('[data-feedback]').forEach(button => button.addEventListener('click', () => { data.session.feeling = button.dataset.feedback; save(); syncFeedbackToBackend({ completed: true, feeling: data.session.feeling }); const status = document.querySelector('[data-feedback-status]'); if (status) status.textContent = `Sensação registrada: ${button.dataset.feedback}`; toast('Feedback salvo'); }));
   document.querySelectorAll('[data-not-completed-reason]').forEach(button => button.addEventListener('click', () => { data.session.reasonNotCompleted = button.dataset.notCompletedReason; save(); syncFeedbackToBackend({ completed: false, reason_not_completed: data.session.reasonNotCompleted }); const status = document.querySelector('[data-reason-status]'); if (status) status.textContent = `Motivo registrado: ${button.dataset.notCompletedReason}`; toast('Motivo salvo sem julgamento'); }));

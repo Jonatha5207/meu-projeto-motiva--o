@@ -57,6 +57,14 @@ export function registerCommunityRoutes({ json, readJsonBody, requireUser, servi
       json(response, 204, {});
       return true;
     }
+    // Rota publica de proposito (sem requireUser): e o link de convite que a
+    // pessoa recebe no WhatsApp antes de ter conta. Devolve so dados do jogo,
+    // nunca dados de quem participa -- ver getPublicPickupEvent.
+    if (request.url?.match(/^\/api\/pickup-events\/[^/]+\/public$/) && request.method === 'GET') {
+      const eventId = request.url.split('/')[3];
+      json(response, 200, await services.community.getPublicPickupEvent(eventId));
+      return true;
+    }
     if (request.url === '/api/pickup-events' && request.method === 'GET') {
       const user = await requireUser(request, response); if (!user) return true;
       json(response, 200, await services.community.listPickupEvents(user.id));
