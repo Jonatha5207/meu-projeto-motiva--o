@@ -184,6 +184,18 @@ h3 { font-size: 16px; font-weight: 700; }
 .pickup-event-card { display: grid; gap: 12px; }
 .pickup-event-head { display: flex; align-items: center; gap: 12px; }
 .pickup-event-head h3 { font-size: 15px; }
+.pickup-spots { display: grid; gap: 7px; padding: 12px 14px; border-radius: 14px; background: var(--sage); }
+.pickup-spots-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px; }
+.pickup-spots-line strong { font-size: 15px; color: var(--green-dark); }
+.pickup-spots-bar { height: 6px; overflow: hidden; border-radius: 10px; background: rgba(255, 255, 255, .6); }
+.pickup-spots-bar span { display: block; height: 100%; border-radius: inherit; background: var(--green); transition: width .35s ease; }
+/* Perto de fechar o time e o momento em que chamar alguem resolve o jogo --
+   por isso esse estado ganha destaque visual proprio, nao so mais um numero. */
+.pickup-spots-close { background: var(--peach); }
+.pickup-spots-close .pickup-spots-bar span { background: #c2643a; }
+.pickup-spots-full { background: var(--line); }
+.pickup-spots-full .pickup-spots-line strong { color: var(--muted); }
+.pickup-spots-full .pickup-spots-bar span { background: var(--muted); }
 .pickup-event-meta { display: flex; flex-wrap: wrap; gap: 10px 14px; color: var(--muted); font-size: 12px; }
 .meeting-point-meta { display: flex; flex-wrap: wrap; gap: 10px 14px; color: var(--muted); font-size: 12px; }
 .pickup-event-participants { display: flex; align-items: center; }

@@ -845,6 +845,34 @@ function formatEventDateTime(iso) {
   const date = new Date(iso);
   return `${date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 }
+// "12/09 · 21:00" sozinho nao cria nenhuma urgencia -- a pessoa le a data e
+// segue rolando. Saber que e HOJE, ou que comeca em 2h, e o que faz decidir
+// participar na hora.
+function relativeEventTime(iso) {
+  const date = new Date(iso);
+  const now = new Date();
+  const minutes = Math.round((date - now) / 60000);
+  const hour = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  if (minutes < -15) return { label: `Já começou · ${hour}`, urgent: false, past: true };
+  if (minutes <= 90) return { label: minutes <= 5 ? 'Começando agora' : `Começa em ${minutes} min`, urgent: true, past: false };
+  const sameDay = date.toDateString() === now.toDateString();
+  if (sameDay) return { label: `Hoje às ${hour}`, urgent: true, past: false };
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  if (date.toDateString() === tomorrow.toDateString()) return { label: `Amanhã às ${hour}`, urgent: false, past: false };
+  return { label: `${date.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })} · ${hour}`, urgent: false, past: false };
+}
+function renderPickupSpotsBlock(event, terms) {
+  const taken = Number(event.spots_taken) || 0;
+  const total = Number(event.max_spots) || 0;
+  const missing = Math.max(0, total - taken);
+  const percent = total ? Math.min(100, (taken / total) * 100) : 0;
+  const full = missing === 0;
+  return `<div class="pickup-spots ${full ? 'pickup-spots-full' : missing <= 2 ? 'pickup-spots-close' : ''}">
+    <div class="pickup-spots-line"><strong>${full ? 'Time completo' : missing === 1 ? `Falta 1 ${terms.people.replace(/e?s$/, '')}` : `Faltam ${missing} ${terms.people}`}</strong><span class="small">${taken} de ${total} confirmados</span></div>
+    <div class="pickup-spots-bar"><span style="width:${percent}%"></span></div>
+  </div>`;
+}
 function formatEventPrice(cents) {
   if (!cents) return 'Gratuito';
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -860,9 +888,8 @@ function renderPickupEventCard(event) {
   const terms = pickupEventTerms(event.activity);
   const isCreator = event.creator_id === data.userId;
   const actionLabel = isCreator ? `Cancelar ${terms.noun}` : event.joined ? `Sair do ${terms.noun}` : full ? 'Lotado' : 'Participar';
-  const missing = event.max_spots - event.spots_taken;
-  const spotsLabel = full ? `${event.spots_taken}/${event.max_spots} ${terms.people}` : `Faltam ${missing} ${terms.people}`;
-  return `<article class="card pickup-event-card"><div class="pickup-event-head"><div class="meeting-point-icon">${sportIcon(event.activity)}</div><div><h3>${escapeHtml(event.title)}</h3><p class="small">${escapeHtml(event.location_name)}</p></div><span class="status-pill ${full ? 'status-neutral' : 'status-active'}">${spotsLabel}</span></div><div class="pickup-event-meta"><span>📅 ${formatEventDateTime(event.scheduled_at)}</span><span>⏱ ${event.duration_minutes} min</span><span>💰 ${formatEventPrice(event.price_cents)}</span></div>${event.participants.length ? `<div class="pickup-event-participants">${avatars}${extra}</div>` : ''}<div class="pickup-event-actions"><button class="${isCreator || event.joined ? 'secondary' : 'primary'} pickup-event-button" data-pickup-event="${event.id}" data-joined="${event.joined}" data-creator="${isCreator}" ${full && !event.joined ? 'disabled' : ''}>${actionLabel}</button>${isCreator || event.joined ? `<button class="secondary pickup-event-chat-button" data-open-pickup-chat="${event.id}">💬 Conversar</button>` : ''}${(isCreator || event.joined) && sportLayout(event.activity).slug === 'team' ? `<button class="secondary pickup-team-button" data-organize-team="${event.id}">🎲 Times</button>` : ''}</div></article>`;
+  const timing = relativeEventTime(event.scheduled_at);
+  return `<article class="card pickup-event-card"><div class="pickup-event-head"><div class="meeting-point-icon">${sportIcon(event.activity)}</div><div><h3>${escapeHtml(event.title)}</h3><p class="small">${escapeHtml(event.location_name)}</p></div><span class="status-pill ${timing.urgent ? 'status-active' : 'status-neutral'}">${escapeHtml(timing.label)}</span></div>${renderPickupSpotsBlock(event, terms)}<div class="pickup-event-meta"><span>📅 ${formatEventDateTime(event.scheduled_at)}</span><span>⏱ ${event.duration_minutes} min</span><span>💰 ${formatEventPrice(event.price_cents)}</span></div>${event.participants.length ? `<div class="pickup-event-participants">${avatars}${extra}</div>` : ''}<div class="pickup-event-actions"><button class="${isCreator || event.joined ? 'secondary' : 'primary'} pickup-event-button" data-pickup-event="${event.id}" data-joined="${event.joined}" data-creator="${isCreator}" ${full && !event.joined ? 'disabled' : ''}>${actionLabel}</button>${isCreator || event.joined ? `<button class="secondary pickup-event-chat-button" data-open-pickup-chat="${event.id}">💬 Conversar</button>` : ''}${(isCreator || event.joined) && sportLayout(event.activity).slug === 'team' ? `<button class="secondary pickup-team-button" data-organize-team="${event.id}">🎲 Times</button>` : ''}</div></article>`;
 }
 function pickupEventTerms(activity) {
   const isTeam = sportLayout(activity).slug === 'team';
