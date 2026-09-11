@@ -975,7 +975,8 @@ function initMeetingMap() {
   filterPickupEventsForMap(pickupEvents.filter(event => Number.isFinite(event.lat) && Number.isFinite(event.lng))).forEach(event => {
     const coordinates = [event.lat, event.lng];
     bounds.push(coordinates);
-    L.marker(coordinates, { icon: L.divIcon({ className: 'pickup-map-pin', html: '⚽', iconSize: [30, 30] }) }).addTo(mapInstance)
+    const pinColor = DRAWER_CATEGORY_COLORS[sportLayout(event.activity).slug] || DRAWER_CATEGORY_COLORS.direct;
+    L.marker(coordinates, { icon: L.divIcon({ className: 'pickup-map-pin-badge', html: `<span style="background:${pinColor}">${sportIcon(event.activity)}</span>`, iconSize: [32, 32] }) }).addTo(mapInstance)
       .bindPopup(`<strong>${escapeHtml(event.title)}</strong><br>${escapeHtml(event.location_name)}<br>${new Date(event.scheduled_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`);
   });
   if (bounds.length) mapInstance.fitBounds(bounds, { padding: [24, 24] });
