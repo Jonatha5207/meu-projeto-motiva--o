@@ -211,6 +211,22 @@ fun CompanheiroWebScreen(
                         isLoading = true
                     }
 
+                    // Relatos de "fica tudo branco e trava, nao entra" sem nenhum erro de
+                    // JS aparecendo (nem no console, nem sem tratamento) apontam pra algo
+                    // que nao passa por onConsoleMessage nem onReceivedError -- o processo
+                    // do WebView em si morrendo (o motor de renderizacao travando ou sendo
+                    // morto pelo Android por falta de memoria, bem plausivel com mapa
+                    // Leaflet + geolocalizacao + busca de endereco tudo de uma vez num
+                    // aparelho mediano) e o candidato mais forte que sobrou. Sem tratar
+                    // isso aqui, o Android teria que matar o app inteiro; assim, pelo menos
+                    // fica registrado e visivel o que aconteceu.
+                    override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                        EventReporter.report(authToken, "WEBVIEW_RENDERER_GONE", mapOf("didCrash" to detail.didCrash(), "priorityAtExit" to detail.rendererPriorityAtExit()))
+                        android.widget.Toast.makeText(context, "O mecanismo do app travou/foi encerrado (didCrash=${detail.didCrash()}). Feche e abra o app de novo.", android.widget.Toast.LENGTH_LONG).show()
+                        view.destroy()
+                        return true
+                    }
+
                     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
                         if (request.isForMainFrame) {
                             EventReporter.report(authToken, "WEBVIEW_LOAD_ERROR", mapOf("description" to error.description?.toString(), "url" to request.url.toString()))
