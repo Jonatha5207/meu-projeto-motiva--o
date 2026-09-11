@@ -59,6 +59,14 @@ const initialData = {
 };
 const sportCatalog = ['Academia', 'Corrida', 'Caminhada', 'Natação', 'Ciclismo', 'Crossfit', 'Dança', 'Futebol', 'Futsal', 'Basquete', 'Vôlei', 'Tênis', 'Beach Tennis', 'Badminton', 'Squash', 'Yoga', 'Pilates', 'Alongamento', 'Boxe', 'Jiu-Jitsu', 'Muay Thai', 'Karatê', 'Taekwondo', 'MMA', 'Skate', 'Surf', 'Remo', 'Canoagem', 'Stand up paddle', 'Escalada', 'Atletismo', 'Ginástica', 'Handebol', 'Rugby', 'Críquete', 'Beisebol', 'Softbol', 'Hóquei', 'Polo aquático', 'Patinação', 'Triatlo', 'Outra'];
 const sportAccent = { 'Academia': 'orange', 'Corrida': 'orange', 'Crossfit': 'orange', 'Boxe': 'orange', 'Jiu-Jitsu': 'orange', 'Muay Thai': 'orange', 'Karatê': 'orange', 'Taekwondo': 'orange', 'MMA': 'orange', 'Futebol': 'orange', 'Futsal': 'orange', 'Basquete': 'orange', 'Handebol': 'orange', 'Rugby': 'orange', 'Atletismo': 'orange', 'Natação': 'blue', 'Ciclismo': 'blue', 'Surf': 'blue', 'Remo': 'blue', 'Canoagem': 'blue', 'Stand up paddle': 'blue', 'Polo aquático': 'blue', 'Triatlo': 'blue', 'Vôlei': 'blue', 'Tênis': 'blue', 'Beach Tennis': 'blue', 'Badminton': 'blue', 'Squash': 'blue', 'Hóquei': 'blue', 'Patinação': 'blue', 'Yoga': 'green', 'Pilates': 'green', 'Alongamento': 'green', 'Caminhada': 'green', 'Dança': 'green', 'Escalada': 'green', 'Ginástica': 'green', 'Skate': 'green', 'Críquete': 'green', 'Beisebol': 'green', 'Softbol': 'green', 'Outra': 'green' };
+// Tamanho padrao de time (jogadores em quadra/campo, goleiro incluso onde existe)
+// pros esportes coletivos -- usado por "Organizar times" pra dividir o grupo em
+// times do tamanho certo (ex.: Futsal = 5) em vez de so cortar ao meio. Numeros
+// oficiais/mais comuns; sem fonte melhor pro que "time completo" significa em
+// cada modalidade, entao ajustavel se algum ficar estranho na pratica.
+const TEAM_SIZE_BY_SPORT = { 'Futebol': 11, 'Futsal': 5, 'Basquete': 5, 'Vôlei': 6, 'Handebol': 7, 'Rugby': 7, 'Beisebol': 9, 'Softbol': 9, 'Hóquei': 6, 'Críquete': 11, 'Polo aquático': 7 };
+const MAX_TEAMS = 4;
+const TEAM_LABELS = ['A', 'B', 'C', 'D'];
 const meetingPointCatalog = [
   { id: 'ibirapuera-sp', name: 'Parque Ibirapuera', city: 'São Paulo, SP', lat: -23.5874, lng: -46.6576, activities: ['Corrida', 'Caminhada', 'Ciclismo'], members: 28, note: 'Área pública, movimentada e com boa iluminação.' },
   { id: 'flamengo-rj', name: 'Aterro do Flamengo', city: 'Rio de Janeiro, RJ', lat: -22.9339, lng: -43.1719, activities: ['Corrida', 'Caminhada', 'Ciclismo', 'Skate'], members: 21, note: 'Ponto amplo para combinar durante o dia.' },
@@ -1076,12 +1084,18 @@ function fitMeetingMap() { if (mapInstance && currentView === 'map') initMeeting
 function openMapFiltersModal() {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
+  // Antes listava os 41 esportes do catalogo inteiro aqui dentro -- numa tela
+  // de celular isso virava uma parede enorme de botoes empurrando "Aplicar"
+  // pra fora da area visivel, sem nenhum jeito claro de fechar o modal
+  // (relatado como "quebrado embaixo"). Reaproveita a mesma lista curta de 8
+  // esportes comuns do menu rapido do drawer -- e o mesmo espirito do
+  // "Meus dados": cabecalho com titulo + X, conteudo enxuto.
+  const filterSports = ['all', ...DRAWER_QUICK_SPORTS];
   overlay.innerHTML = `<div class="modal-sheet map-filters-sheet" role="dialog" aria-modal="true" aria-label="Filtros do mapa">
-    <h3>Filtros</h3>
+    <div class="modal-header-row"><h3>Filtros</h3><button class="icon-button" type="button" data-close-filters aria-label="Fechar">×</button></div>
     <span class="field-label">Modalidade</span>
     <div class="choice-grid map-filter-sports">
-      <button type="button" class="choice ${mapFilters.sport === 'all' ? 'selected' : ''}" data-filter-sport="all">Todas</button>
-      ${sportCatalog.map(sport => `<button type="button" class="choice ${mapFilters.sport === sport ? 'selected' : ''}" data-filter-sport="${escapeHtml(sport)}">${escapeHtml(sport)}</button>`).join('')}
+      ${filterSports.map(sport => `<button type="button" class="choice ${mapFilters.sport === sport ? 'selected' : ''}" data-filter-sport="${escapeHtml(sport)}">${sport === 'all' ? 'Todas' : escapeHtml(sport)}</button>`).join('')}
     </div>
     <span class="field-label">Quando</span>
     <div class="challenge-period-tabs map-filter-time">
@@ -1095,6 +1109,7 @@ function openMapFiltersModal() {
   </div>`;
   document.body.appendChild(overlay);
   const close = () => overlay.remove();
+  overlay.querySelector('[data-close-filters]').addEventListener('click', close);
   overlay.querySelectorAll('[data-filter-sport]').forEach(button => button.addEventListener('click', () => { overlay.querySelectorAll('[data-filter-sport]').forEach(b => b.classList.remove('selected')); button.classList.add('selected'); }));
   overlay.querySelectorAll('[data-filter-time]').forEach(button => button.addEventListener('click', () => { overlay.querySelectorAll('[data-filter-time]').forEach(b => b.classList.remove('selected')); button.classList.add('selected'); }));
   overlay.querySelector('[data-filters-clear]').addEventListener('click', () => { mapFilters = { sport: 'all', maxPriceCents: null, timeWindow: 'any', radiusKm: null }; close(); render(); toast('Filtros limpos'); });
@@ -1530,24 +1545,33 @@ function openJoinSuccessModal(event) {
   overlay.addEventListener('click', evt => { if (evt.target === overlay) close(); });
   overlay.querySelector('[data-join-open-chat]').addEventListener('click', () => { close(); openPickupEventChat(event.id); });
 }
-function shuffleTeams(participants) {
+function shuffleTeams(participants, activity) {
   const shuffled = [...participants];
   for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
-  const mid = Math.ceil(shuffled.length / 2);
-  return { teamA: shuffled.slice(0, mid), teamB: shuffled.slice(mid) };
+  const teamSize = TEAM_SIZE_BY_SPORT[activity] || Math.max(1, Math.ceil(shuffled.length / 2));
+  // Quantos times de "teamSize" pessoas cabem no grupo -- pelo menos 2 (mesmo
+  // com poucos participantes, sempre faz sentido ter Time A/B), no maximo
+  // MAX_TEAMS (A a D) pra nao virar uma lista longa demais dentro do modal.
+  const teamCount = Math.min(MAX_TEAMS, Math.max(2, Math.ceil(shuffled.length / teamSize)));
+  const teams = Array.from({ length: teamCount }, () => []);
+  shuffled.forEach((person, index) => teams[index % teamCount].push(person));
+  return { teams, teamSize };
 }
 function renderTeamColumns(split) {
   if (!split) return '<p class="small">Toque em "Sortear times" para dividir o grupo.</p>';
-  const column = (label, team, className) => `<div class="team-column ${className}"><strong>${label}</strong>${team.map(person => `<span class="team-member-chip">${escapeHtml(person.name)}</span>`).join('') || '<span class="small">Vazio</span>'}</div>`;
-  return `<div class="team-columns">${column('Time A', split.teamA, 'team-column-a')}${column('Time B', split.teamB, 'team-column-b')}</div>`;
+  const classes = ['team-column-a', 'team-column-b', 'team-column-c', 'team-column-d'];
+  const column = (team, index) => `<div class="team-column ${classes[index]}"><strong>Time ${TEAM_LABELS[index]}</strong>${team.map(person => `<span class="team-member-chip">${escapeHtml(person.name)}</span>`).join('') || '<span class="small">Vazio</span>'}</div>`;
+  return `<div class="team-columns">${split.teams.map(column).join('')}</div>`;
 }
 function openTeamOrganizerModal(event) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   const existing = data.community.teamSplits[event.id];
+  const teamSize = TEAM_SIZE_BY_SPORT[event.activity];
   overlay.innerHTML = `<div class="modal-sheet team-organizer-sheet" role="dialog" aria-modal="true" aria-label="Organizar times">
     <h3>Organizar times</h3>
     <p class="small">${event.participants.length} confirmados. O sorteio fica salvo neste aparelho; toque em "Enviar para o chat" para todo mundo ver.</p>
+    ${teamSize ? `<p class="small team-size-note">Times de ${escapeHtml(event.activity)} costumam ter ${teamSize} ${teamSize === 1 ? 'pessoa' : 'pessoas'}${TEAM_SIZE_BY_SPORT[event.activity] ? ' em quadra/campo' : ''}. Com mais gente, o sorteio cria times C e D automaticamente.</p>` : ''}
     <div data-team-columns>${renderTeamColumns(existing)}</div>
     <div class="modal-actions">
       <button type="button" class="secondary" data-shuffle-teams>🎲 Sortear times</button>
@@ -1560,7 +1584,7 @@ function openTeamOrganizerModal(event) {
   overlay.querySelector('[data-close-team-modal]').addEventListener('click', close);
   overlay.addEventListener('click', evt => { if (evt.target === overlay) close(); });
   overlay.querySelector('[data-shuffle-teams]').addEventListener('click', () => {
-    const split = shuffleTeams(event.participants);
+    const split = shuffleTeams(event.participants, event.activity);
     data.community.teamSplits[event.id] = { ...split, generatedAt: Date.now() };
     save();
     overlay.querySelector('[data-team-columns]').innerHTML = renderTeamColumns(split);
@@ -1569,7 +1593,7 @@ function openTeamOrganizerModal(event) {
   overlay.querySelector('[data-send-teams-chat]').addEventListener('click', () => {
     const split = data.community.teamSplits[event.id];
     if (!split) return;
-    const text = `🎲 Times sorteados:\nTime A: ${split.teamA.map(p => p.name).join(', ') || '-'}\nTime B: ${split.teamB.map(p => p.name).join(', ') || '-'}`;
+    const text = `🎲 Times sorteados:\n${split.teams.map((team, index) => `Time ${TEAM_LABELS[index]}: ${team.map(p => p.name).join(', ') || '-'}`).join('\n')}`;
     sendPickupEventMessage(event.id, text);
     close();
     toast('Times enviados para o chat do jogo');
