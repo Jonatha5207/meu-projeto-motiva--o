@@ -179,6 +179,7 @@ h3 { font-size: 16px; font-weight: 700; }
 .pickup-event-head { display: flex; align-items: center; gap: 12px; }
 .pickup-event-head h3 { font-size: 15px; }
 .pickup-event-meta { display: flex; flex-wrap: wrap; gap: 10px 14px; color: var(--muted); font-size: 12px; }
+.meeting-point-meta { display: flex; flex-wrap: wrap; gap: 10px 14px; color: var(--muted); font-size: 12px; }
 .pickup-event-participants { display: flex; align-items: center; }
 .pickup-avatar { display: grid; place-items: center; width: 28px; height: 28px; margin-left: -8px; border: 2px solid var(--card); border-radius: 50%; background: var(--sage); color: var(--green-dark); font-size: 11px; font-weight: 800; }
 .pickup-avatar:first-child { margin-left: 0; }
