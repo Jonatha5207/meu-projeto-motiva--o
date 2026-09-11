@@ -52,6 +52,19 @@ export function createCommunityService({ store, notificationService }) {
     })));
   }
 
+  async function notifyCreatorAboutJoin(event, joinerId, takenNow) {
+    if (!notificationService) return;
+    const joiner = await store.getUserById(joinerId);
+    const missing = Math.max(0, event.max_spots - takenNow);
+    const name = joiner?.name || 'Alguém';
+    await notificationService.pushToUser(event.creator_id, {
+      title: `${name} entrou no seu ${event.activity}`,
+      body: missing === 0 ? 'Tá completo! Todo mundo confirmado.' : `Faltam ${missing} pessoa${missing === 1 ? '' : 's'} · ${event.location_name}`,
+      key: 'PICKUP_EVENT_JOINED',
+      tag: `companheiro-pickup-${event.id}`,
+    });
+  }
+
   return {
     async listPeople(userId) {
       const [allUsers, myProfile, myConnections] = await Promise.all([store.listAllUsers(), store.getProfile(userId), store.listConnectionsForUser(userId)]);
@@ -189,11 +202,20 @@ export function createCommunityService({ store, notificationService }) {
       const event = await store.getPickupEvent(eventId);
       if (!event) throw notFound('pickup_event_not_found');
       const participants = await store.listPickupEventParticipants(eventId);
+      let joinedNow = false;
       if (!participants.some(item => item.user_id === userId)) {
         if (participants.length >= event.max_spots) throw new AppError(409, 'pickup_event_full');
         await store.joinPickupEvent(eventId, userId);
+        joinedNow = true;
       }
       broadcastRealtime('pickup-event-updated', { id: eventId });
+      // Quem marcou o jogo so descobria que alguem entrou se abrisse o app e
+      // fosse olhar -- o broadcast acima so atualiza a tela de quem ja esta
+      // com o app aberto no mapa. Sem esse aviso, a pessoa que organiza fica
+      // sem saber se o jogo vai acontecer ou nao.
+      if (joinedNow && notificationService && event.creator_id !== userId) {
+        notifyCreatorAboutJoin(event, userId, participants.length + 1).catch(() => {});
+      }
       return decoratePickupEvent(store, event, userId);
     },
 
