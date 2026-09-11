@@ -865,36 +865,54 @@ function renderPickupEventsSection() {
   const terms = pickupEventTerms(data.profile.activity);
   return `<div class="section-title"><div class="stat-line"><h3>${terms.noun === 'jogo' ? 'Jogos marcados' : 'Encontros marcados'}</h3><span class="status-pill">${relevant.length}</span></div></div><button class="secondary" style="width:100%;margin-bottom:14px" data-create-pickup-event>+ ${terms.verbCreate} de ${escapeHtml(data.profile.activity)}</button><div class="pickup-event-list">${relevant.length ? relevant.map(renderPickupEventCard).join('') : `<p class="small">Nenhum ${terms.noun} marcado ainda para essa modalidade. Que tal marcar o primeiro?</p>`}</div>`;
 }
+// Reproduzido de verdade num emulador: um unico toque no botao "Marcar um
+// encontro/jogo" as vezes disparava esta funcao DUAS vezes (o handler de
+// clique dobrando a chamada -- provavelmente o WebView sintetizando
+// touchend+click separados sob carga, algo que nao acontece no Chrome
+// desktop). A segunda chamada criava um SEGUNDO overlay com um SEGUNDO
+// "location-picker-map", e o Leaflet recusa inicializar dois mapas no
+// mesmo id ("Map container is already initialized"), travando com dois
+// modais empilhados e confusos -- exatamente o "fica branco, aperto de
+// novo ele sai" relatado. Essa trava simples resolve independente da
+// causa exata do toque duplo: enquanto o fluxo ja estiver em andamento,
+// um novo toque no mesmo botao nao faz nada.
+let creatingPickupEvent = false;
 async function openCreatePickupEventModal() {
-  const location = await openLocationPickerModal();
-  if (!location) return;
-  const values = await openModal({
-    title: 'Marcar um jogo',
-    message: `Local: ${location.name}`,
-    fields: [
-      { id: 'activity', label: 'Modalidade', type: 'select', options: sportCatalog, value: data.profile.activity },
-      { id: 'scheduled_at', label: 'Data e hora', type: 'datetime-local' },
-      { id: 'duration_minutes', label: 'Duração (minutos)', value: 60, type: 'number', min: 15, max: 480 },
-      { id: 'price_cents', label: 'Preço por pessoa (R$, 0 se for grátis)', value: 0, type: 'number', min: 0 },
-      { id: 'max_spots', label: 'Vagas', value: 10, type: 'number', min: 1, max: 200 },
-    ],
-    confirmText: 'Marcar jogo',
-  });
-  if (!values) return;
-  const activity = values.activity?.trim();
-  const title = `${activity} com a galera`;
-  if (!activity || !values.scheduled_at) { toast('Preencha modalidade e data'); return; }
+  if (creatingPickupEvent) return;
+  creatingPickupEvent = true;
   try {
-    await apiRequest('/api/pickup-events', { method: 'POST', body: JSON.stringify({
-      title, activity, location_name: location.name, lat: location.lat, lng: location.lng,
-      scheduled_at: new Date(values.scheduled_at).toISOString(),
-      duration_minutes: Number(values.duration_minutes) || 60,
-      price_cents: Math.round((Number(values.price_cents) || 0) * 100),
-      max_spots: Number(values.max_spots) || 10,
-    }) });
-    toast('Jogo marcado!');
-    loadPickupEvents();
-  } catch { toast('Não foi possível marcar o jogo agora. Você está conectado ao servidor?'); }
+    const location = await openLocationPickerModal();
+    if (!location) return;
+    const values = await openModal({
+      title: 'Marcar um jogo',
+      message: `Local: ${location.name}`,
+      fields: [
+        { id: 'activity', label: 'Modalidade', type: 'select', options: sportCatalog, value: data.profile.activity },
+        { id: 'scheduled_at', label: 'Data e hora', type: 'datetime-local' },
+        { id: 'duration_minutes', label: 'Duração (minutos)', value: 60, type: 'number', min: 15, max: 480 },
+        { id: 'price_cents', label: 'Preço por pessoa (R$, 0 se for grátis)', value: 0, type: 'number', min: 0 },
+        { id: 'max_spots', label: 'Vagas', value: 10, type: 'number', min: 1, max: 200 },
+      ],
+      confirmText: 'Marcar jogo',
+    });
+    if (!values) return;
+    const activity = values.activity?.trim();
+    const title = `${activity} com a galera`;
+    if (!activity || !values.scheduled_at) { toast('Preencha modalidade e data'); return; }
+    try {
+      await apiRequest('/api/pickup-events', { method: 'POST', body: JSON.stringify({
+        title, activity, location_name: location.name, lat: location.lat, lng: location.lng,
+        scheduled_at: new Date(values.scheduled_at).toISOString(),
+        duration_minutes: Number(values.duration_minutes) || 60,
+        price_cents: Math.round((Number(values.price_cents) || 0) * 100),
+        max_spots: Number(values.max_spots) || 10,
+      }) });
+      toast('Jogo marcado!');
+      loadPickupEvents();
+    } catch { toast('Não foi possível marcar o jogo agora. Você está conectado ao servidor?'); }
+  } finally {
+    creatingPickupEvent = false;
+  }
 }
 let nearbyPlaces = [];
 let nearbyPlacesConfigured = null;
@@ -1426,11 +1444,20 @@ function openModal({ title, message, fields = [], confirmText = 'Salvar', cancel
   });
 }
 function openConfirm(title, message, { danger = false, confirmText = 'Confirmar' } = {}) { return openModal({ title, message, confirmText, danger }).then(result => result === true); }
+let locationPickerMapCounter = 0;
 function openLocationPickerModal() {
   return new Promise(resolve => {
+    // Id unico por chamada (nao mais um id fixo repetido) -- segunda camada de
+    // protecao contra o "Map container is already initialized" do Leaflet,
+    // caso duas instancias deste modal cheguem a coexistir por qualquer motivo
+    // futuro (a trava em creatingPickupEvent, no chamador, e a primeira linha
+    // de defesa). Sem isso, dois overlays com o MESMO id colidiam porque
+    // L.map(id) usa document.getElementById, que sempre acha o primeiro --
+    // travando o segundo modal com um mapa que nunca aparece.
+    const mapElementId = `location-picker-map-${++locationPickerMapCounter}`;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.innerHTML = `<div class="location-picker-sheet" role="dialog" aria-modal="true" aria-label="Escolher local no mapa"><div class="location-picker-head"><h3>Escolher local no mapa</h3><p class="small">Mova o mapa até o ponto de encontro, igual no WhatsApp.</p></div><div id="location-picker-map" style="position:relative;height:100%"><span class="location-picker-pin" aria-hidden="true">📍</span></div><div class="location-picker-foot"><span class="location-picker-address small" data-picker-address>Buscando sua localização...</span><div class="location-picker-actions"><button type="button" class="secondary" data-picker-cancel>Cancelar</button><button type="button" class="primary" data-picker-confirm>Usar este local</button></div></div></div>`;
+    overlay.innerHTML = `<div class="location-picker-sheet" role="dialog" aria-modal="true" aria-label="Escolher local no mapa"><div class="location-picker-head"><h3>Escolher local no mapa</h3><p class="small">Mova o mapa até o ponto de encontro, igual no WhatsApp.</p></div><div id="${mapElementId}" style="position:relative;height:100%"><span class="location-picker-pin" aria-hidden="true">📍</span></div><div class="location-picker-foot"><span class="location-picker-address small" data-picker-address>Buscando sua localização...</span><div class="location-picker-actions"><button type="button" class="secondary" data-picker-cancel>Cancelar</button><button type="button" class="primary" data-picker-confirm>Usar este local</button></div></div></div>`;
     document.body.appendChild(overlay);
     const current = { lat: -14.235, lng: -51.925, name: 'Ponto em -14.235, -51.925' };
     const addressEl = overlay.querySelector('[data-picker-address]');
@@ -1589,9 +1616,27 @@ function bindEvents() {
   document.querySelectorAll('[data-like-post]').forEach(button => button.addEventListener('click', async () => {
     const post = data.community.posts.find(item => item.id === button.dataset.likePost);
     if (!post) return;
+    // Antes isso "adivinhava" o novo estado localmente (post.liked = !post.liked)
+    // e sempre chamava o mesmo endpoint de curtir -- nunca desfazia a curtida de
+    // verdade no servidor, e recarregar o feed em outro aparelho mostrava a
+    // contagem errada. Agora o servidor faz o toggle de verdade (curtir/descurtir)
+    // e devolve o estado real; a UI só reflete o que veio de lá. Continua
+    // funcionando offline com uma prévia local, que se corrige sozinha no
+    // próximo sync do feed.
+    const previousLiked = post.liked;
+    const previousLikes = post.likes;
     post.liked = !post.liked;
     post.likes = Math.max(0, post.likes + (post.liked ? 1 : -1));
-    try { await apiRequest(`/api/social/posts/${encodeURIComponent(post.id)}/like`, { method: 'POST' }); } catch { /* Local reaction remains available offline. */ }
+    render();
+    try {
+      const updated = await apiRequest(`/api/social/posts/${encodeURIComponent(post.id)}/like`, { method: 'POST' });
+      post.liked = updated.liked;
+      post.likes = updated.likes;
+    } catch {
+      post.liked = previousLiked;
+      post.likes = previousLikes;
+      toast('Sem conexão: não foi possível curtir agora');
+    }
     save();
     render();
   }));
