@@ -131,6 +131,9 @@ export function createMemoryStore({ dataDir }) {
     async listRecentEventsForUser(userId, limit = 50) {
       return analyticsEvents.filter(item => item.user_id === userId).slice(-limit).reverse();
     },
+    async listRecentEvents(limit = 100) {
+      return analyticsEvents.slice(-limit).reverse();
+    },
 
     async listRecentPosts(limit) { return socialPosts.slice(-limit).reverse(); },
     async createPost(post) { socialPosts.push(post); return post; },

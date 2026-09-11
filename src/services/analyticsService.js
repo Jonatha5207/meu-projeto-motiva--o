@@ -15,6 +15,9 @@ export function createAnalyticsService({ store }) {
     async recentEventsForUser(userId, limit = 50) {
       return store.listRecentEventsForUser(userId, limit);
     },
+    async recentEvents(limit = 100) {
+      return store.listRecentEvents(limit);
+    },
     async adminMetrics() {
       const allSessions = await store.listAllSessions();
       const opportunities = allSessions.filter(item => item.rescue_opportunity).length;

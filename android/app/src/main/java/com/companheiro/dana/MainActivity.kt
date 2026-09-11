@@ -31,6 +31,7 @@ import androidx.core.content.ContextCompat
 import com.companheiro.dana.data.TokenStore
 import com.companheiro.dana.network.ApiClient
 import com.companheiro.dana.network.ApiException
+import com.companheiro.dana.network.EventReporter
 import com.companheiro.dana.service.AlarmScheduler
 import com.companheiro.dana.service.DanaListeningService
 import com.companheiro.dana.ui.ChatLine
@@ -63,10 +64,45 @@ private fun loadChatHistory(raw: String?): List<ChatLine> {
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        // Processo pode recriar a Activity (rotacao de tela etc.) chamando onCreate
+        // de novo -- essa flag evita empilhar o handler varias vezes no mesmo processo.
+        private var crashReporterInstalled = false
+    }
+
     private val apiClient = ApiClient()
     private lateinit var tokenStore: TokenStore
     private lateinit var speechToText: SpeechToText
     private lateinit var audioPlayer: AudioPlayer
+
+    // Nenhum dos relatos de "app trava/fica branco/sai sozinho" no fluxo de Marcar
+    // encontro nunca disparou onConsoleMessage, onReceivedError nem
+    // onRenderProcessGone (ver CompanheiroWebScreen.kt) -- todos cobrem so o que
+    // acontece DENTRO do motor do WebView. Se nenhum deles pega, o candidato que
+    // sobra e um crash no codigo nativo Kotlin/Compose em volta do WebView (a
+    // propria Activity, uma JavascriptInterface bridge rodando em thread de
+    // fundo, etc.), que nenhum desses tres cobre. Isso captura QUALQUER excecao
+    // nao tratada em qualquer lugar do app antes dele morrer, manda pro servidor,
+    // e so depois deixa o comportamento padrao do Android acontecer (o app ainda
+    // fecha do mesmo jeito -- isso so garante que fique registrado o motivo).
+    private fun installCrashReporter() {
+        if (crashReporterInstalled) return
+        crashReporterInstalled = true
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                EventReporter.reportBlocking(tokenStore.token, "NATIVE_APP_CRASH", mapOf(
+                    "message" to throwable.message,
+                    "type" to throwable.javaClass.name,
+                    "thread" to thread.name,
+                    "stack" to throwable.stackTraceToString().take(4000),
+                ))
+            } catch (e: Exception) {
+                // Se ate reportar o crash falhar, nao ha mais nada a fazer -- segue pro handler padrao.
+            }
+            previousHandler?.uncaughtException(thread, throwable)
+        }
+    }
 
     // O WebView nunca tinha o ciclo de vida dele ligado ao da Activity -- isso
     // e uma pegadinha classica do Android: sem pausar/retomar explicitamente,
@@ -92,6 +128,7 @@ class MainActivity : ComponentActivity() {
         tokenStore = TokenStore(applicationContext)
         speechToText = SpeechToText(applicationContext)
         audioPlayer = AudioPlayer(applicationContext)
+        installCrashReporter()
 
         setContent {
             val colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
